@@ -11,10 +11,14 @@ package org.opensearch.common.io;
 import java.io.IOException;
 
 import org.apache.lucene.codecs.CodecUtil;
+import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.store.BufferedChecksumIndexInput;
 import org.apache.lucene.store.ChecksumIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.IndexOutput;
+
+import static org.apache.lucene.codecs.CodecUtil.FOOTER_MAGIC;
+import static org.apache.lucene.codecs.CodecUtil.readBELong;
 
 /**
  * Manages versioning and checksum for a stream of content.
@@ -81,7 +85,70 @@ public class VersionedCodecStreamWrapper<T> {
      * @param indexInput file input stream
      */
     private void checkFooter(ChecksumIndexInput indexInput) throws IOException {
-        CodecUtil.checkFooter(indexInput);
+        checkFooterLucene(indexInput);
+    }
+
+    static long readCRC(IndexInput input) throws IOException {
+        long value = readBELong(input);
+        if ((value & 0xFFFFFFFF00000000L) != 0) {
+            throw new CorruptIndexException("Illegal CRC-32 checksum: " + value, input);
+        }
+        return value;
+    }
+
+    private static void validateFooter(IndexInput in) throws IOException {
+//        long remaining = in.length() - in.getFilePointer();
+//        long expected = footerLength();
+//        if (remaining < expected) {
+//            throw new CorruptIndexException(
+//                "misplaced codec footer (file truncated?): remaining="
+//                    + remaining
+//                    + ", expected="
+//                    + expected
+//                    + ", fp="
+//                    + in.getFilePointer(),
+//                in);
+//        } else if (remaining > expected) {
+//            throw new CorruptIndexException(
+//                "misplaced codec footer (file extended?): remaining="
+//                    + remaining
+//                    + ", expected="
+//                    + expected
+//                    + ", fp="
+//                    + in.getFilePointer(),
+//                in);
+//        }
+//
+        final int magic = CodecUtil.readBEInt(in);
+        if (magic != FOOTER_MAGIC) {
+            throw new CorruptIndexException(
+                "codec footer mismatch (file truncated?): actual footer="
+                    + magic
+                    + " vs expected footer="
+                    + FOOTER_MAGIC,
+                in);
+        }
+
+        final int algorithmID = CodecUtil.readBEInt(in);
+        if (algorithmID != 0) {
+            throw new CorruptIndexException(
+                "codec footer mismatch: unknown algorithmID: " + algorithmID, in);
+        }
+    }
+
+    public static long checkFooterLucene(ChecksumIndexInput in) throws IOException {
+        validateFooter(in);
+        long actualChecksum = in.getChecksum();
+        long expectedChecksum = readCRC(in);
+        if (expectedChecksum != actualChecksum) {
+            throw new CorruptIndexException(
+                "checksum failed (hardware problem?) : expected="
+                    + Long.toHexString(expectedChecksum)
+                    + " actual="
+                    + Long.toHexString(actualChecksum),
+                in);
+        }
+        return actualChecksum;
     }
 
     /**
