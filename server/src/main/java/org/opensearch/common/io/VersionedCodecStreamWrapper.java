@@ -47,10 +47,10 @@ public class VersionedCodecStreamWrapper<T> {
      * @return stream content parsed into {@link T}
      */
     public T readStream(IndexInput indexInput) throws IOException {
+        CodecUtil.checksumEntireFile(indexInput);
         ChecksumIndexInput checksumIndexInput = new BufferedChecksumIndexInput(indexInput);
         int readStreamVersion = checkHeader(checksumIndexInput);
         T content = getHandlerForVersion(readStreamVersion).readContent(checksumIndexInput);
-        checkFooter(checksumIndexInput);
         return content;
     }
 

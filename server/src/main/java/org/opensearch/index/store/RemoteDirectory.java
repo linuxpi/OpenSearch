@@ -15,6 +15,7 @@ import org.apache.lucene.store.IndexOutput;
 import org.apache.lucene.store.Lock;
 import org.opensearch.common.blobstore.BlobContainer;
 import org.opensearch.common.blobstore.BlobMetadata;
+import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;

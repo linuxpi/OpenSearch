@@ -9,6 +9,7 @@
 package org.opensearch.index.store;
 
 import org.apache.lucene.store.IndexInput;
+import org.opensearch.common.io.stream.BytesStreamInput;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -25,7 +26,7 @@ import java.io.InputStream;
  */
 public class RemoteIndexInput extends IndexInput {
 
-    private final InputStream inputStream;
+    private InputStream inputStream;
     private final long size;
     private long filePointer;
 
@@ -99,5 +100,9 @@ public class RemoteIndexInput extends IndexInput {
     @Override
     public IndexInput slice(String sliceDescription, long offset, long length) throws IOException {
         throw new UnsupportedOperationException();
+    }
+
+    public byte[] readAllBytes() throws IOException {
+        return inputStream.readAllBytes();
     }
 }
