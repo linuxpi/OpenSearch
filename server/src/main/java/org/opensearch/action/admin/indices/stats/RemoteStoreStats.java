@@ -19,14 +19,20 @@ import java.io.IOException;
 
 public class RemoteStoreStats implements Writeable, ToXContentFragment {
 
-    private final RemoteSegmentUploadShardStatsTracker remoteSegmentUploadShardStatsTracker;
+    private RemoteSegmentUploadShardStatsTracker remoteSegmentUploadShardStatsTracker;
 
     public RemoteStoreStats(RemoteSegmentUploadShardStatsTracker remoteSegmentUploadShardStatsTracker) {
         this.remoteSegmentUploadShardStatsTracker = remoteSegmentUploadShardStatsTracker;
     }
 
     public RemoteStoreStats(StreamInput in) {
-        remoteSegmentUploadShardStatsTracker = new RemoteSegmentUploadShardStatsTracker(in);
+        try {
+            String test = in.readString();
+            assert test != null;
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+//        remoteSegmentUploadShardStatsTracker = new RemoteSegmentUploadShardStatsTracker(in);
     }
 
     public RemoteSegmentUploadShardStatsTracker getStats() {
@@ -48,6 +54,7 @@ public class RemoteStoreStats implements Writeable, ToXContentFragment {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeOptionalWriteable(remoteSegmentUploadShardStatsTracker);
+        out.writeString("varun");
+//        remoteSegmentUploadShardStatsTracker.writeTo(out);
     }
 }
