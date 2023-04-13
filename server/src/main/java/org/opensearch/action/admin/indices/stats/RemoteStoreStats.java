@@ -26,13 +26,13 @@ public class RemoteStoreStats implements Writeable, ToXContentFragment {
     }
 
     public RemoteStoreStats(StreamInput in) {
-        try {
-            String test = in.readString();
-            assert test != null;
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-//        remoteSegmentUploadShardStatsTracker = new RemoteSegmentUploadShardStatsTracker(in);
+//        try {
+//            String test = in.readString();
+//            assert test != null;
+//        } catch (IOException e) {
+//            e.printStackTrace();
+//        }
+        remoteSegmentUploadShardStatsTracker = new RemoteSegmentUploadShardStatsTracker(in);
     }
 
     public RemoteSegmentUploadShardStatsTracker getStats() {
@@ -54,7 +54,7 @@ public class RemoteStoreStats implements Writeable, ToXContentFragment {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
-        out.writeString("varun");
-//        remoteSegmentUploadShardStatsTracker.writeTo(out);
+//        out.writeString("varun");
+        remoteSegmentUploadShardStatsTracker.writeTo(out);
     }
 }
