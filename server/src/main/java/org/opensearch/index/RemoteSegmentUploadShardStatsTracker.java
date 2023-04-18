@@ -8,6 +8,8 @@
 
 package org.opensearch.index;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.opensearch.common.io.stream.StreamInput;
 import org.opensearch.common.io.stream.StreamOutput;
 import org.opensearch.common.io.stream.Writeable;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
  * @opensearch.internal
  */
 public class RemoteSegmentUploadShardStatsTracker implements Writeable {
+    private static final Logger logger = LogManager.getLogger(RemoteSegmentUploadShardStatsTracker.class);
 
     public static final int UPLOAD_BYTES_WINDOW_SIZE = 2000;
 
@@ -75,7 +78,7 @@ public class RemoteSegmentUploadShardStatsTracker implements Writeable {
 
     private final MovingAverage uploadBytesMovingAverage = new MovingAverage(UPLOAD_BYTES_WINDOW_SIZE);
 
-    private final AtomicReference<MovingAverage> uploadBytesPerSecMovingAverageReference;
+    private AtomicReference<MovingAverage> uploadBytesPerSecMovingAverageReference;
 
     private final MovingAverage uploadBytesPerSecondMovingAverage = new MovingAverage(UPLOAD_BYTES_PER_SECOND_WINDOW_SIZE);
 
@@ -85,6 +88,7 @@ public class RemoteSegmentUploadShardStatsTracker implements Writeable {
 
     @Override
     public void writeTo(StreamOutput out) throws IOException {
+        logger.info("here there here");
         shardId.writeTo(out);
         out.writeLong(getLocalRefreshSeqNo());
         out.writeLong(getLocalRefreshTime());
@@ -97,10 +101,12 @@ public class RemoteSegmentUploadShardStatsTracker implements Writeable {
         out.writeLong(getTotalUploadsSucceeded());
         out.writeLong(getTotalUploadsFailed());
         out.writeLong(getRejectionCount());
+        out.writeGenericValue(uploadBytesMovingAverageReference);
     }
 
     public RemoteSegmentUploadShardStatsTracker(StreamInput in) {
         try {
+            logger.info("reading data here there here");
             shardId = new ShardId(in);
             localRefreshSeqNo.set(in.readLong());
             localRefreshTime.set(in.readLong());
@@ -113,12 +119,12 @@ public class RemoteSegmentUploadShardStatsTracker implements Writeable {
             totalUploadsSucceeded.set(in.readLong());
             totalUploadsFailed.set(in.readLong());
             rejectionCount.set(in.readLong());
+            uploadBytesPerSecMovingAverageReference = (AtomicReference<MovingAverage>) in.readGenericValue();
             // TODO - Varun to replace this
         } catch (IOException e) {
             e.printStackTrace();
         }
         uploadBytesMovingAverageReference = null;
-        uploadBytesPerSecMovingAverageReference = null;
         uploadTimeMovingAverageReference = null;
     }
 

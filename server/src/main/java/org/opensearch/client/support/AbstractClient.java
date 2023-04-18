@@ -75,6 +75,7 @@ import org.opensearch.action.admin.cluster.node.stats.NodesStatsRequestBuilder;
 import org.opensearch.action.admin.cluster.node.stats.NodesStatsResponse;
 import org.opensearch.action.admin.cluster.remotestore.stats.RemoteStoreStatsAction;
 import org.opensearch.action.admin.cluster.remotestore.stats.RemoteStoreStatsRequest;
+import org.opensearch.action.admin.cluster.remotestore.stats.RemoteStoreStatsRequestBuilder;
 import org.opensearch.action.admin.cluster.remotestore.stats.RemoteStoreStatsResponse;
 import org.opensearch.action.admin.cluster.node.tasks.cancel.CancelTasksAction;
 import org.opensearch.action.admin.cluster.node.tasks.cancel.CancelTasksRequest;
@@ -893,6 +894,11 @@ public abstract class AbstractClient implements Client {
         @Override
         public void remoteStoreStats(final RemoteStoreStatsRequest request, final ActionListener<RemoteStoreStatsResponse> listener) {
             execute(RemoteStoreStatsAction.INSTANCE, request, listener);
+        }
+
+        @Override
+        public RemoteStoreStatsRequestBuilder prepareRemoteStoreStats() {
+            return new RemoteStoreStatsRequestBuilder(this, RemoteStoreStatsAction.INSTANCE);
         }
 
         @Override

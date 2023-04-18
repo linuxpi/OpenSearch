@@ -79,13 +79,12 @@ public class TransportRemoteStoreStatsAction extends TransportBroadcastByNodeAct
                     newShardRoutings.add(shardRouting);
                 }
             });
-            return new PlainShardsIterator(newShardRoutings);
         } else {
             newShardRoutings.addAll(clusterState.routingTable().allShards(concreteIndices).getShardRoutings());
         }
         return new PlainShardsIterator(
             newShardRoutings.stream()
-                .filter(shardRouting -> shardRouting.currentNodeId().equals(clusterState.getNodes().getLocalNodeId()))
+//                .filter(shardRouting -> shardRouting.currentNodeId() == null || shardRouting.currentNodeId().equals(clusterState.getNodes().getLocalNodeId()))
                 .filter(ShardRouting::primary)
                 .filter(shardRouting -> {
                     IndexShard indexShard = indicesService.getShardOrNull(shardRouting.shardId());
