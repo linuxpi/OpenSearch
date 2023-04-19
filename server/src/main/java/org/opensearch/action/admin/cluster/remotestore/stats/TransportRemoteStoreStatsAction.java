@@ -84,13 +84,9 @@ public class TransportRemoteStoreStatsAction extends TransportBroadcastByNodeAct
         }
         return new PlainShardsIterator(
             newShardRoutings.stream()
-//                .filter(shardRouting -> shardRouting.currentNodeId() == null || shardRouting.currentNodeId().equals(clusterState.getNodes().getLocalNodeId()))
+                .filter(shardRouting -> !request.local() || (shardRouting.currentNodeId() == null || shardRouting.currentNodeId().equals(clusterState.getNodes().getLocalNodeId())))
                 .filter(ShardRouting::primary)
-                .filter(shardRouting -> {
-                    return indicesService.indexService(shardRouting.index()).getIndexSettings().isRemoteStoreEnabled();
-//                    IndexShard indexShard = indicesService.getShardOrNull(shardRouting.shardId());
-//                    return indexShard != null && indexShard.isRemoteStoreEnabled();
-                })
+                .filter(shardRouting -> indicesService.indexService(shardRouting.index()).getIndexSettings().isRemoteStoreEnabled())
                 .collect(Collectors.toList())
         );
     }
@@ -148,6 +144,6 @@ public class TransportRemoteStoreStatsAction extends TransportBroadcastByNodeAct
         );
         assert Objects.nonNull(remoteSegmentUploadShardStatsTracker);
 
-        return new RemoteStoreStats(remoteSegmentUploadShardStatsTracker);
+        return new RemoteStoreStats(remoteSegmentUploadShardStatsTracker.stats());
     }
 }

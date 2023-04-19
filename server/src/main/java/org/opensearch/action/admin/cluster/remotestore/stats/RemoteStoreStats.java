@@ -22,45 +22,45 @@ import java.io.IOException;
  */
 public class RemoteStoreStats implements Writeable, ToXContentFragment {
 
-    private RemoteSegmentUploadShardStatsTracker remoteSegmentUploadShardStatsTracker;
+    private RemoteSegmentUploadShardStatsTracker.Stats remoteSegmentUploadShardStatsTracker;
 
-    public RemoteStoreStats(RemoteSegmentUploadShardStatsTracker remoteSegmentUploadShardStatsTracker) {
+    public RemoteStoreStats(RemoteSegmentUploadShardStatsTracker.Stats remoteSegmentUploadShardStatsTracker) {
         this.remoteSegmentUploadShardStatsTracker = remoteSegmentUploadShardStatsTracker;
     }
 
     public RemoteStoreStats(StreamInput in) {
         try {
-            remoteSegmentUploadShardStatsTracker = in.readOptionalWriteable(RemoteSegmentUploadShardStatsTracker::new);
+            remoteSegmentUploadShardStatsTracker = in.readOptionalWriteable(RemoteSegmentUploadShardStatsTracker.Stats::new);
         } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    public RemoteSegmentUploadShardStatsTracker getStats() {
+    public RemoteSegmentUploadShardStatsTracker.Stats getStats() {
         return remoteSegmentUploadShardStatsTracker;
     }
 
     @Override
     public XContentBuilder toXContent(XContentBuilder builder, Params params) throws IOException {
         builder.startObject()
-            .field("shardId", remoteSegmentUploadShardStatsTracker.getShardId())
-            .field("local_refresh_time", remoteSegmentUploadShardStatsTracker.getLocalRefreshTime())
-            .field("local_refresh_seq_no", remoteSegmentUploadShardStatsTracker.getLocalRefreshSeqNo())
-            .field("remote_refresh_time", remoteSegmentUploadShardStatsTracker.getRemoteRefreshTime())
-            .field("remote_refresh_seqno", remoteSegmentUploadShardStatsTracker.getRemoteRefreshSeqNo())
-            .field("upload_bytes_started", remoteSegmentUploadShardStatsTracker.getUploadBytesStarted())
-            .field("upload_bytes_succeeded", remoteSegmentUploadShardStatsTracker.getUploadBytesSucceeded())
-            .field("upload_bytes_failed", remoteSegmentUploadShardStatsTracker.getUploadBytesFailed())
-            .field("total_upload_started", remoteSegmentUploadShardStatsTracker.getTotalUploadsStarted())
-            .field("total_upload_succeeded", remoteSegmentUploadShardStatsTracker.getTotalUploadsSucceeded())
-            .field("total_upload_failed", remoteSegmentUploadShardStatsTracker.getTotalUploadsFailed())
-            .field("upload_time_average", remoteSegmentUploadShardStatsTracker.getUploadTimeAverage())
-            .field("upload_bytes_per_sec_average", remoteSegmentUploadShardStatsTracker.getUploadBytesPerSecondAverage())
-            .field("upload_bytes_average", remoteSegmentUploadShardStatsTracker.getUploadBytesAverage())
-            .field("bytes_lag", remoteSegmentUploadShardStatsTracker.getBytesLag())
-            .field("inflight_upload_bytes", remoteSegmentUploadShardStatsTracker.getInflightUploadBytes())
-            .field("inflight_uploads", remoteSegmentUploadShardStatsTracker.getInflightUploads())
-            .field("rejection_count", remoteSegmentUploadShardStatsTracker.getRejectionCount())
+            .field("shardId", remoteSegmentUploadShardStatsTracker.shardId)
+            .field("local_refresh_time", remoteSegmentUploadShardStatsTracker.localRefreshTime)
+            .field("local_refresh_seq_no", remoteSegmentUploadShardStatsTracker.localRefreshSeqNo)
+            .field("remote_refresh_time", remoteSegmentUploadShardStatsTracker.remoteRefreshTime)
+            .field("remote_refresh_seqno", remoteSegmentUploadShardStatsTracker.remoteRefreshSeqNo)
+            .field("upload_bytes_started", remoteSegmentUploadShardStatsTracker.uploadBytesStarted)
+            .field("upload_bytes_succeeded", remoteSegmentUploadShardStatsTracker.uploadBytesSucceeded)
+            .field("upload_bytes_failed", remoteSegmentUploadShardStatsTracker.uploadBytesFailed)
+            .field("total_upload_started", remoteSegmentUploadShardStatsTracker.totalUploadsStarted)
+            .field("total_upload_succeeded", remoteSegmentUploadShardStatsTracker.totalUploadsSucceeded)
+            .field("total_upload_failed", remoteSegmentUploadShardStatsTracker.totalUploadsFailed)
+            .field("upload_time_average", remoteSegmentUploadShardStatsTracker.uploadTimeMovingAverage)
+            .field("upload_bytes_per_sec_average", remoteSegmentUploadShardStatsTracker.uploadBytesPerSecMovingAverage)
+            .field("upload_bytes_average", remoteSegmentUploadShardStatsTracker.uploadBytesMovingAverage)
+            .field("bytes_lag", remoteSegmentUploadShardStatsTracker.bytesLag)
+            .field("inflight_upload_bytes", remoteSegmentUploadShardStatsTracker.inflightUploadBytes)
+            .field("inflight_uploads", remoteSegmentUploadShardStatsTracker.inflightUploads)
+            .field("rejection_count", remoteSegmentUploadShardStatsTracker.rejectionCount)
             .endObject();
         return builder;
     }

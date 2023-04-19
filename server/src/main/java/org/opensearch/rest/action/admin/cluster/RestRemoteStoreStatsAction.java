@@ -16,6 +16,7 @@ import org.opensearch.rest.action.RestToXContentListener;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Objects;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.unmodifiableList;
@@ -43,14 +44,16 @@ public class RestRemoteStoreStatsAction extends BaseRestHandler {
     protected RestChannelConsumer prepareRequest(RestRequest request, NodeClient client) throws IOException {
         String index = request.param("index");
         String shardId = request.param("shardId");
-        String onlyLocal = request.param("local");
+        boolean local = Objects.equals(request.param("local"), "true");
         RemoteStoreStatsRequest remoteStoreStatsRequest = new RemoteStoreStatsRequest();
-        remoteStoreStatsRequest.all();
         if (index != null) {
             remoteStoreStatsRequest.indices(index);
         }
         if (shardId != null) {
             remoteStoreStatsRequest.shards(shardId);
+        }
+        if (local) {
+            remoteStoreStatsRequest.local(local);
         }
         return channel -> client.admin().cluster().remoteStoreStats(remoteStoreStatsRequest, new RestToXContentListener<>(channel));
     }
