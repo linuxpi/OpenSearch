@@ -444,7 +444,7 @@ public class RemoteSegmentUploadShardStatsTracker implements Writeable {
 
         @Override
         public void writeTo(StreamOutput out) throws IOException {
-            out.writeOptionalWriteable(shardId);
+            shardId.writeTo(out);
             out.writeLong(localRefreshSeqNo);
             out.writeLong(localRefreshTime);
             out.writeLong(remoteRefreshSeqNo);
