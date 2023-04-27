@@ -252,7 +252,7 @@ public class ThreadPool implements ReportingService<ThreadPoolInfo>, Scheduler {
         builders.put(Names.SYSTEM_WRITE, new FixedExecutorBuilder(settings, Names.SYSTEM_WRITE, halfProcMaxAt5, 1000, false));
         builders.put(
             Names.TRANSLOG_TRANSFER,
-            new ScalingExecutorBuilder(Names.TRANSLOG_TRANSFER, 1, allocatedProcessors * 2, TimeValue.timeValueMinutes(5))
+            new ScalingExecutorBuilder(Names.TRANSLOG_TRANSFER, 1, allocatedProcessors * 8, TimeValue.timeValueMinutes(5))
         );
         builders.put(Names.TRANSLOG_SYNC, new FixedExecutorBuilder(settings, Names.TRANSLOG_SYNC, allocatedProcessors * 4, 10000));
         builders.put(Names.REMOTE_PURGE, new ScalingExecutorBuilder(Names.REMOTE_PURGE, 1, halfProcMaxAt5, TimeValue.timeValueMinutes(5)));
