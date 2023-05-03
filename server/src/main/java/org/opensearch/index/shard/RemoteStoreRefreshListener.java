@@ -32,6 +32,7 @@ import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -94,6 +95,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         this.primaryTerm = indexShard.getOperationPrimaryTerm();
                         this.remoteDirectory.init();
                     }
+                    String segmentInfoSnapshotFilename = null;
                     try {
                         // if a new segments_N file is present in local that is not uploaded to remote store yet, it
                         // is considered as a first refresh post commit. A cleanup of stale commit files is triggered.
@@ -103,7 +105,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                             deleteStaleCommits();
                         }
 
-                        String segmentInfoSnapshotFilename = null;
                         try (GatedCloseable<SegmentInfos> segmentInfosGatedCloseable = indexShard.getSegmentInfosSnapshot()) {
                             SegmentInfos segmentInfos = segmentInfosGatedCloseable.get();
 
@@ -155,6 +156,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                             logger.warn("Exception while reading SegmentInfosSnapshot", e);
                         } finally {
                             try {
+                                logger.warn("trying to delete due to failure: " + segmentInfoSnapshotFilename);
                                 if (segmentInfoSnapshotFilename != null) {
                                     storeDirectory.deleteFile(segmentInfoSnapshotFilename);
                                 }
@@ -166,7 +168,17 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         // We don't want to fail refresh if upload of new segments fails. The missed segments will be re-tried
                         // in the next refresh. This should not affect durability of the indexed data after remote trans-log integration.
                         // add shard details here
-                        logger.warn("Exception while uploading new segments to the remote segment store", e);
+                        logger.warn(String.format(Locale.ROOT, "Exception while uploading new segments to the remote segment store" +
+                                                      " - [%s]", indexShard.shardId.toString()), e);
+                    } finally {
+                        try {
+                            logger.warn("trying to delete due to failure: " + segmentInfoSnapshotFilename);
+                            if (segmentInfoSnapshotFilename != null) {
+                                storeDirectory.deleteFile(segmentInfoSnapshotFilename);
+                            }
+                        } catch (IOException e) {
+                            logger.warn("Exception while deleting: " + segmentInfoSnapshotFilename, e);
+                        }
                     }
                 }
             } catch (Throwable t) {
