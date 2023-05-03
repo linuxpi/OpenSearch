@@ -51,6 +51,7 @@ public class BlobStoreTransferService implements TransferService {
         BlobPath blobPath = (BlobPath) remoteTransferPath;
         threadPool.executor(threadpoolName).execute(ActionRunnable.wrap(listener, l -> {
             try (InputStream inputStream = fileSnapshot.inputStream()) {
+                inputStream.mark(inputStream.available());
                 blobStore.blobContainer(blobPath)
                     .writeBlobAtomic(fileSnapshot.getName(), inputStream, fileSnapshot.getContentLength(), true);
                 l.onResponse(fileSnapshot);

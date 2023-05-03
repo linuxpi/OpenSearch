@@ -218,6 +218,7 @@ public class TranslogTransferManager {
         // Delete the translog and checkpoint files asynchronously
         deleteTranslogFilesAsync(primaryTerm, translogFiles, onCompletion);
         // Delete the metadata files asynchronously
+        // batch it to avoid failure due to spike in request
         deleteMetadataFilesAsync(metadataFiles, onCompletion);
     }
 

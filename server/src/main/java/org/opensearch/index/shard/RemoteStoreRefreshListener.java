@@ -130,7 +130,9 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
 
                                 boolean uploadStatus = uploadNewSegments(localSegmentsPostRefresh);
                                 if (uploadStatus) {
-                                    segmentInfoSnapshotFilename = uploadSegmentInfosSnapshot(latestSegmentInfos.get(), segmentInfos);
+                                    long commitGeneration = SegmentInfos.generationFromSegmentsFileName(latestSegmentInfos.get());
+                                    segmentInfoSnapshotFilename = SEGMENT_INFO_SNAPSHOT_FILENAME_PREFIX + "__" + commitGeneration;
+                                    uploadSegmentInfosSnapshot(segmentInfoSnapshotFilename, segmentInfos);
                                     localSegmentsPostRefresh.add(segmentInfoSnapshotFilename);
 
                                     remoteDirectory.uploadMetadata(
@@ -163,6 +165,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                     } catch (IOException e) {
                         // We don't want to fail refresh if upload of new segments fails. The missed segments will be re-tried
                         // in the next refresh. This should not affect durability of the indexed data after remote trans-log integration.
+                        // add shard details here
                         logger.warn("Exception while uploading new segments to the remote segment store", e);
                     }
                 }
@@ -186,8 +189,8 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
         userData.put(SequenceNumbers.MAX_SEQ_NO, Long.toString(maxSeqNoFromSegmentInfos));
         segmentInfosSnapshot.setUserData(userData, false);
 
-        long commitGeneration = SegmentInfos.generationFromSegmentsFileName(latestSegmentsNFilename);
-        String segmentInfoSnapshotFilename = SEGMENT_INFO_SNAPSHOT_FILENAME_PREFIX + "__" + commitGeneration;
+//        long commitGeneration = SegmentInfos.generationFromSegmentsFileName(latestSegmentsNFilename);
+        String segmentInfoSnapshotFilename = latestSegmentsNFilename;
         try (IndexOutput indexOutput = storeDirectory.createOutput(segmentInfoSnapshotFilename, IOContext.DEFAULT)) {
             segmentInfosSnapshot.write(indexOutput);
         }
