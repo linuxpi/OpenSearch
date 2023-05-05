@@ -344,7 +344,7 @@ public class TranslogTransferManager {
      * @param metadataFilesToDelete list of metadata files to be deleted.
      */
     private void deleteMetadataFilesAsync(List<String> metadataFilesToDelete) {
-        deleteMetadataFilesAsync(metadataFilesToDelete, () -> {});
+//        deleteMetadataFilesAsync(metadataFilesToDelete, () -> {});
     }
 
     /**
