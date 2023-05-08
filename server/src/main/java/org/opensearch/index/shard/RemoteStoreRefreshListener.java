@@ -26,7 +26,9 @@ import org.opensearch.index.engine.InternalEngine;
 import org.opensearch.index.seqno.SequenceNumbers;
 import org.opensearch.index.store.RemoteSegmentStoreDirectory;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.nio.file.NoSuchFileException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -130,7 +132,9 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
 
                                 boolean uploadStatus = uploadNewSegments(localSegmentsPostRefresh);
                                 if (uploadStatus) {
-                                    segmentInfoSnapshotFilename = uploadSegmentInfosSnapshot(latestSegmentInfos.get(), segmentInfos);
+                                    long commitGeneration = SegmentInfos.generationFromSegmentsFileName(latestSegmentInfos.get());
+                                    segmentInfoSnapshotFilename = generateSegmentInfoSnapshotFilename(commitGeneration);
+                                    uploadSegmentInfosSnapshot(segmentInfoSnapshotFilename, segmentInfos);
                                     localSegmentsPostRefresh.add(segmentInfoSnapshotFilename);
 
                                     remoteDirectory.uploadMetadata(
@@ -154,8 +158,13 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         } finally {
                             try {
                                 if (segmentInfoSnapshotFilename != null) {
+                                    logger.trace("Deleting segment info snapshot file: " + segmentInfoSnapshotFilename);
                                     storeDirectory.deleteFile(segmentInfoSnapshotFilename);
                                 }
+                            } catch (NoSuchFileException | FileNotFoundException e) {
+                                // We generate the filename before the actual file is created.
+                                // So in case of failure the file might not have been created yet
+                                logger.trace("Exception while deleting. Missing file : " + segmentInfoSnapshotFilename, e);
                             } catch (IOException e) {
                                 logger.warn("Exception while deleting: " + segmentInfoSnapshotFilename, e);
                             }
@@ -178,7 +187,16 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
             && !remoteDirectory.containsFile(lastCommittedLocalSegmentFileName, getChecksumOfLocalFile(lastCommittedLocalSegmentFileName)));
     }
 
-    String uploadSegmentInfosSnapshot(String latestSegmentsNFilename, SegmentInfos segmentInfosSnapshot) throws IOException {
+    /**
+     * Generates the filename for segment info snapshot *
+     * @param commitGeneration commit generation for which filname needs to be generated
+     * @return segment info snapshot filename
+     */
+    private String generateSegmentInfoSnapshotFilename(long commitGeneration) {
+        return SEGMENT_INFO_SNAPSHOT_FILENAME_PREFIX + "__" + commitGeneration;
+    }
+
+    void uploadSegmentInfosSnapshot(String segmentInfoSnapshotFilename, SegmentInfos segmentInfosSnapshot) throws IOException {
         final long maxSeqNoFromSegmentInfos = indexShard.getEngine().getMaxSeqNoFromSegmentInfos(segmentInfosSnapshot);
 
         Map<String, String> userData = segmentInfosSnapshot.getUserData();
@@ -186,14 +204,11 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
         userData.put(SequenceNumbers.MAX_SEQ_NO, Long.toString(maxSeqNoFromSegmentInfos));
         segmentInfosSnapshot.setUserData(userData, false);
 
-        long commitGeneration = SegmentInfos.generationFromSegmentsFileName(latestSegmentsNFilename);
-        String segmentInfoSnapshotFilename = SEGMENT_INFO_SNAPSHOT_FILENAME_PREFIX + "__" + commitGeneration;
         try (IndexOutput indexOutput = storeDirectory.createOutput(segmentInfoSnapshotFilename, IOContext.DEFAULT)) {
             segmentInfosSnapshot.write(indexOutput);
         }
         storeDirectory.sync(Collections.singleton(segmentInfoSnapshotFilename));
         remoteDirectory.copyFrom(storeDirectory, segmentInfoSnapshotFilename, segmentInfoSnapshotFilename, IOContext.DEFAULT, true);
-        return segmentInfoSnapshotFilename;
     }
 
     // Visible for testing
