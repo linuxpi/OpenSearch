@@ -82,14 +82,14 @@ public class BlobStoreTransferService implements TransferService {
 
     @Override
     public void deleteBlobsAsync(String threadpoolName, Iterable<String> path, List<String> fileNames, ActionListener<Void> listener) {
-        threadPool.executor(threadpoolName).execute(() -> {
-            try {
-                deleteBlobs(path, fileNames);
-                listener.onResponse(null);
-            } catch (IOException e) {
-                listener.onFailure(e);
-            }
-        });
+//        threadPool.executor(threadpoolName).execute(() -> {
+//            try {
+//                deleteBlobs(path, fileNames);
+//                listener.onResponse(null);
+//            } catch (IOException e) {
+//                listener.onFailure(e);
+//            }
+//        });
     }
 
     @Override
