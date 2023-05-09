@@ -106,6 +106,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         }
 
                         String segmentInfoSnapshotFilename = null;
+                        String metadataFilename = null;
                         try (GatedCloseable<SegmentInfos> segmentInfosGatedCloseable = indexShard.getSegmentInfosSnapshot()) {
                             SegmentInfos segmentInfos = segmentInfosGatedCloseable.get();
 
@@ -137,12 +138,11 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                                     uploadSegmentInfosSnapshot(segmentInfoSnapshotFilename, segmentInfos);
                                     localSegmentsPostRefresh.add(segmentInfoSnapshotFilename);
 
-                                    remoteDirectory.uploadMetadata(
-                                        localSegmentsPostRefresh,
-                                        storeDirectory,
+                                    metadataFilename = remoteDirectory.getMetadataFileName(
                                         indexShard.getOperationPrimaryTerm(),
                                         segmentInfos.getGeneration()
                                     );
+                                    remoteDirectory.uploadMetadata(localSegmentsPostRefresh, storeDirectory, metadataFilename);
                                     localSegmentChecksumMap.keySet()
                                         .stream()
                                         .filter(file -> !localSegmentsPostRefresh.contains(file))
@@ -160,6 +160,10 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                                 if (segmentInfoSnapshotFilename != null) {
                                     logger.trace("Deleting segment info snapshot file: " + segmentInfoSnapshotFilename);
                                     storeDirectory.deleteFile(segmentInfoSnapshotFilename);
+                                }
+                                if (metadataFilename != null) {
+                                    logger.trace("Deleting segment metadata file: " + metadataFilename);
+                                    storeDirectory.deleteFile(metadataFilename);
                                 }
                             } catch (NoSuchFileException | FileNotFoundException e) {
                                 // We generate the filename before the actual file is created.
