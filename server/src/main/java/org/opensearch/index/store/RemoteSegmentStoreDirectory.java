@@ -185,7 +185,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory {
      * Contains utility methods that provide various parts of metadata filename along with comparator
      * Each metadata filename is of format: PREFIX__PrimaryTerm__Generation__UUID
      */
-    static class MetadataFilenameUtils {
+    public static class MetadataFilenameUtils {
         public static final String SEPARATOR = "__";
         public static final String METADATA_PREFIX = "metadata";
 
@@ -218,7 +218,7 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory {
         }
 
         // Visible for testing
-        static String getMetadataFilename(long primaryTerm, long generation, String uuid) {
+        public static String getMetadataFilename(long primaryTerm, long generation, String uuid) {
             return String.join(
                 SEPARATOR,
                 METADATA_PREFIX,
@@ -356,14 +356,12 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory {
      * Upload metadata file
      * @param segmentFiles segment files that are part of the shard at the time of the latest refresh
      * @param storeDirectory instance of local directory to temporarily create metadata file before upload
-     * @param primaryTerm primary term to be used in the name of metadata file
-     * @param generation commit generation
+     * @param metadataFilename instance of local directory to temporarily create metadata file before upload
      * @throws IOException in case of I/O error while uploading the metadata file
      */
-    public void uploadMetadata(Collection<String> segmentFiles, Directory storeDirectory, long primaryTerm, long generation)
+    public void uploadMetadata(Collection<String> segmentFiles, Directory storeDirectory, String metadataFilename)
         throws IOException {
         synchronized (this) {
-            String metadataFilename = MetadataFilenameUtils.getMetadataFilename(primaryTerm, generation, this.commonFilenameSuffix);
             IndexOutput indexOutput = storeDirectory.createOutput(metadataFilename, IOContext.DEFAULT);
             Map<String, String> uploadedSegments = new HashMap<>();
             for (String file : segmentFiles) {
@@ -379,6 +377,10 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory {
             remoteMetadataDirectory.copyFrom(storeDirectory, metadataFilename, metadataFilename, IOContext.DEFAULT);
             storeDirectory.deleteFile(metadataFilename);
         }
+    }
+
+    public String getMetadataFileName(long primaryTerm, long generation) {
+        return MetadataFilenameUtils.getMetadataFilename(primaryTerm, generation, this.commonFilenameSuffix);
     }
 
     private String getChecksumOfLocalFile(Directory directory, String file) throws IOException {

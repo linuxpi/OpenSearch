@@ -25,6 +25,7 @@ import org.opensearch.index.engine.EngineException;
 import org.opensearch.index.engine.InternalEngine;
 import org.opensearch.index.seqno.SequenceNumbers;
 import org.opensearch.index.store.RemoteSegmentStoreDirectory;
+import org.opensearch.index.store.RemoteSegmentStoreDirectory.MetadataFilenameUtils;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -106,6 +107,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                         }
 
                         String segmentInfoSnapshotFilename = null;
+                        String metadataFilename = null;
                         try (GatedCloseable<SegmentInfos> segmentInfosGatedCloseable = indexShard.getSegmentInfosSnapshot()) {
                             SegmentInfos segmentInfos = segmentInfosGatedCloseable.get();
 
@@ -137,11 +139,11 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                                     uploadSegmentInfosSnapshot(segmentInfoSnapshotFilename, segmentInfos);
                                     localSegmentsPostRefresh.add(segmentInfoSnapshotFilename);
 
+                                    metadataFilename = remoteDirectory.getMetadataFileName(indexShard.getOperationPrimaryTerm(), segmentInfos.getGeneration());
                                     remoteDirectory.uploadMetadata(
                                         localSegmentsPostRefresh,
                                         storeDirectory,
-                                        indexShard.getOperationPrimaryTerm(),
-                                        segmentInfos.getGeneration()
+                                        metadataFilename
                                     );
                                     localSegmentChecksumMap.keySet()
                                         .stream()
@@ -160,6 +162,10 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                                 if (segmentInfoSnapshotFilename != null) {
                                     logger.trace("Deleting segment info snapshot file: " + segmentInfoSnapshotFilename);
                                     storeDirectory.deleteFile(segmentInfoSnapshotFilename);
+                                }
+                                if (metadataFilename != null) {
+                                    logger.trace("Deleting segment metadata file: " + metadataFilename);
+                                    storeDirectory.deleteFile(metadataFilename);
                                 }
                             } catch (NoSuchFileException | FileNotFoundException e) {
                                 // We generate the filename before the actual file is created.

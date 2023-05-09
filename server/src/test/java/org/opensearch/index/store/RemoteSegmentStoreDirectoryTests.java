@@ -441,7 +441,7 @@ public class RemoteSegmentStoreDirectoryTests extends OpenSearchTestCase {
         when(storeDirectory.createOutput(startsWith("metadata__12__o"), eq(IOContext.DEFAULT))).thenReturn(indexOutput);
 
         Collection<String> segmentFiles = List.of("s1", "s2", "s3");
-        assertThrows(NoSuchFileException.class, () -> remoteSegmentStoreDirectory.uploadMetadata(segmentFiles, storeDirectory, 12L, 24L));
+        assertThrows(NoSuchFileException.class, () -> remoteSegmentStoreDirectory.uploadMetadata(segmentFiles, storeDirectory, remoteSegmentStoreDirectory.getMetadataFileName(12L, 24L)));
     }
 
     public void testUploadMetadataNonEmpty() throws IOException {
@@ -454,7 +454,7 @@ public class RemoteSegmentStoreDirectoryTests extends OpenSearchTestCase {
         when(storeDirectory.createOutput(startsWith("metadata__12__o"), eq(IOContext.DEFAULT))).thenReturn(indexOutput);
 
         Collection<String> segmentFiles = List.of("_0.si");
-        remoteSegmentStoreDirectory.uploadMetadata(segmentFiles, storeDirectory, 12L, 24L);
+        remoteSegmentStoreDirectory.uploadMetadata(segmentFiles, storeDirectory, remoteSegmentStoreDirectory.getMetadataFileName(12L, 24L));
 
         verify(remoteMetadataDirectory).copyFrom(
             eq(storeDirectory),
