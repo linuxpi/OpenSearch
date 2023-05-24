@@ -81,6 +81,7 @@ dependencies {
   api "com.fasterxml.jackson.core:jackson-annotations:${versions.jackson}"
   api "com.fasterxml.jackson.dataformat:jackson-dataformat-cbor:${versions.jackson}"
   api "joda-time:joda-time:${versions.joda}"
+  api "org.reactivestreams:reactive-streams:${versions.reactivestreams}"
   api "org.slf4j:slf4j-api:${versions.slf4j}"
 
   // network stack
