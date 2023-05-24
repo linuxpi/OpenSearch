@@ -38,6 +38,10 @@ public class RemoteDirectory extends Directory {
 
     protected final BlobContainer blobContainer;
 
+    public BlobContainer getBlobContainer() {
+        return blobContainer;
+    }
+
     public RemoteDirectory(BlobContainer blobContainer) {
         this.blobContainer = blobContainer;
     }
