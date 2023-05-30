@@ -23,6 +23,7 @@ import org.apache.lucene.store.IndexInput;
 import org.opensearch.action.bulk.BackoffPolicy;
 import org.opensearch.common.concurrent.GatedCloseable;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.common.util.UploadListener;
 import org.opensearch.common.util.concurrent.ConcurrentCollections;
 import org.opensearch.index.engine.EngineException;
 import org.opensearch.index.engine.InternalEngine;
@@ -130,7 +131,7 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
         this.segmentTracker = segmentTracker;
         resetBackOffDelayIterator();
         this.checkpointPublisher = checkpointPublisher;
-        this.fileUploader = new FileUploader(new UploadTracker() {
+        this.fileUploader = new FileUploader(new UploadListener() {
             @Override
             public void beforeUpload(String file) {
                 // Start tracking the upload bytes started

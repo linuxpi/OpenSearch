@@ -69,9 +69,9 @@ public class RemoteSegmentStoreDirectoryTests extends IndexShardTestCase {
     private RemoteStoreMetadataLockManager mdLockManager;
 
     private RemoteSegmentStoreDirectory remoteSegmentStoreDirectory;
+    private TestUploadListener testUploadTracker;
     private IndexShard indexShard;
     private SegmentInfos segmentInfos;
-    private TestUploadTracker testUploadTracker;
 
     @Before
     public void setup() throws IOException {
@@ -80,7 +80,7 @@ public class RemoteSegmentStoreDirectoryTests extends IndexShardTestCase {
         mdLockManager = mock(RemoteStoreMetadataLockManager.class);
 
         remoteSegmentStoreDirectory = new RemoteSegmentStoreDirectory(remoteDataDirectory, remoteMetadataDirectory, mdLockManager);
-        testUploadTracker = new TestUploadTracker();
+        testUploadTracker = new TestUploadListener();
 
         Settings indexSettings = Settings.builder().put(IndexMetadata.SETTING_VERSION_CREATED, org.opensearch.Version.CURRENT).build();
 
@@ -560,7 +560,7 @@ public class RemoteSegmentStoreDirectoryTests extends IndexShardTestCase {
         remoteSegmentStoreDirectory.copyFilesFrom(storeDirectory, List.of(filename), IOContext.DEFAULT, testUploadTracker);
 
         assertTrue(remoteSegmentStoreDirectory.getSegmentsUploadedToRemoteStore().containsKey(filename));
-        assertEquals(TestUploadTracker.UploadStatus.UPLOAD_SUCCESS, testUploadTracker.getUploadStatus(filename));
+        assertEquals(TestUploadListener.UploadStatus.UPLOAD_SUCCESS, testUploadTracker.getUploadStatus(filename));
 
         storeDirectory.close();
     }
@@ -592,7 +592,7 @@ public class RemoteSegmentStoreDirectoryTests extends IndexShardTestCase {
         );
 
         assertFalse(remoteSegmentStoreDirectory.getSegmentsUploadedToRemoteStore().containsKey(filename));
-        assertEquals(TestUploadTracker.UploadStatus.UPLOAD_FAILURE, testUploadTracker.getUploadStatus(filename));
+        assertEquals(TestUploadListener.UploadStatus.UPLOAD_FAILURE, testUploadTracker.getUploadStatus(filename));
 
         storeDirectory.close();
     }
@@ -624,7 +624,7 @@ public class RemoteSegmentStoreDirectoryTests extends IndexShardTestCase {
         );
 
         assertFalse(remoteSegmentStoreDirectory.getSegmentsUploadedToRemoteStore().containsKey(filename));
-        assertEquals(TestUploadTracker.UploadStatus.UPLOAD_FAILURE, testUploadTracker.getUploadStatus(filename));
+        assertEquals(TestUploadListener.UploadStatus.UPLOAD_FAILURE, testUploadTracker.getUploadStatus(filename));
 
         storeDirectory.close();
     }

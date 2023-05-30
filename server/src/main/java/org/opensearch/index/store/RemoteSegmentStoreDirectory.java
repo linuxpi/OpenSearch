@@ -32,7 +32,7 @@ import org.opensearch.common.blobstore.transfer.stream.OffsetRangeIndexInputStre
 import org.opensearch.common.io.VersionedCodecStreamWrapper;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.common.util.ByteUtils;
-import org.opensearch.index.shard.UploadTracker;
+import org.opensearch.common.util.UploadListener;
 import org.opensearch.index.store.exception.ChecksumCombinationException;
 import org.opensearch.index.store.lockmanager.FileLockInfo;
 import org.opensearch.index.store.lockmanager.RemoteStoreCommitLevelLockManager;
@@ -370,11 +370,11 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
      * @param from          The directory for all files to be uploaded
      * @param files         A list containing the names of all files to be uploaded
      * @param context       IOContext to be used to open IndexInput to files during remote upload
-     * @param uploadTracker An {@link UploadTracker} for tracking file uploads
+     * @param uploadListener An {@link UploadListener} for tracking file uploads
      * @throws Exception When upload future creation fails or if {@link RemoteSegmentStoreDirectory#copyFrom(Directory, String, String, IOContext, boolean)}
      *                   throws an exception
      */
-    public boolean copyFilesFrom(Directory from, Collection<String> files, IOContext context, UploadTracker uploadTracker)
+    public boolean copyFilesFrom(Directory from, Collection<String> files, IOContext context, UploadListener uploadListener)
         throws Exception {
 
         List<CompletableFuture<Void>> resultFutures = new ArrayList<>();
@@ -382,34 +382,34 @@ public final class RemoteSegmentStoreDirectory extends FilterDirectory implement
         boolean uploadOfAllFilesSuccessful = true;
         for (String src : files) {
             String remoteFilename = createRemoteFileName(src, false);
-            uploadTracker.beforeUpload(src);
+            uploadListener.beforeUpload(src);
             if (remoteDataDirectory.getBlobContainer().isMultiStreamUploadSupported()) {
                 try {
                     CompletableFuture<Void> resultFuture = createUploadFuture(from, src, remoteFilename, context);
                     resultFuture.whenComplete((uploadResponse, throwable) -> {
                         if (throwable != null) {
-                            uploadTracker.onFailure(src);
+                            uploadListener.onFailure(src);
                         } else {
-                            uploadTracker.onSuccess(src);
+                            uploadListener.onSuccess(src);
                         }
                     });
                     resultFutures.add(resultFuture);
                 } catch (Exception e) {
-                    uploadTracker.onFailure(src);
+                    uploadListener.onFailure(src);
                     throw e;
                 }
             } else {
                 boolean success = true;
                 try {
                     copyFrom(from, src, src, context, false);
-                    uploadTracker.onSuccess(src);
+                    uploadListener.onSuccess(src);
                 } catch (IOException e) {
                     success = false;
                     uploadOfAllFilesSuccessful = false;
                     logger.warn(() -> new ParameterizedMessage("Exception while uploading file {} to the remote segment store", src), e);
                 } finally {
                     if (!success) {
-                        uploadTracker.onFailure(src);
+                        uploadListener.onFailure(src);
                     }
                 }
             }
