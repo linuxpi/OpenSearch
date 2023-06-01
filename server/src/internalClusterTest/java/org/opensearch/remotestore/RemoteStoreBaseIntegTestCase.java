@@ -16,25 +16,16 @@ import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.index.IndexModule;
 import org.opensearch.index.IndexSettings;
 import org.opensearch.indices.replication.common.ReplicationType;
-import org.opensearch.plugins.Plugin;
 import org.opensearch.test.OpenSearchIntegTestCase;
-import org.opensearch.test.transport.MockTransportService;
 
 import java.nio.file.Path;
-import java.util.Collection;
 
-import static java.util.Arrays.asList;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 
 public class RemoteStoreBaseIntegTestCase extends OpenSearchIntegTestCase {
     protected static final String REPOSITORY_NAME = "test-remore-store-repo";
     protected static final int SHARD_COUNT = 1;
     protected static final int REPLICA_COUNT = 1;
-
-    @Override
-    protected Collection<Class<? extends Plugin>> nodePlugins() {
-        return asList(MockTransportService.TestPlugin.class);
-    }
 
     @Override
     protected boolean addMockInternalEngine() {
@@ -47,6 +38,10 @@ public class RemoteStoreBaseIntegTestCase extends OpenSearchIntegTestCase {
     }
 
     public Settings indexSettings() {
+        return defaultIndexSettings();
+    }
+
+    private Settings defaultIndexSettings() {
         return Settings.builder()
             .put(super.indexSettings())
             .put(IndexModule.INDEX_QUERY_CACHE_ENABLED_SETTING.getKey(), false)
@@ -63,6 +58,20 @@ public class RemoteStoreBaseIntegTestCase extends OpenSearchIntegTestCase {
         assertAcked(
             clusterAdmin().preparePutRepository(REPOSITORY_NAME).setType("fs").setSettings(Settings.builder().put("location", path))
         );
+    protected Settings remoteStoreIndexSettings(int numberOfReplicas) {
+        return Settings.builder()
+            .put(defaultIndexSettings())
+            .put(IndexMetadata.SETTING_NUMBER_OF_SHARDS, 1)
+            .put(IndexMetadata.SETTING_NUMBER_OF_REPLICAS, numberOfReplicas)
+            .build();
+    }
+
+    protected Settings remoteTranslogIndexSettings(int numberOfReplicas) {
+        return Settings.builder()
+            .put(remoteStoreIndexSettings(numberOfReplicas))
+            .put(IndexMetadata.SETTING_REMOTE_TRANSLOG_STORE_ENABLED, true)
+            .put(IndexMetadata.SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, REPOSITORY_NAME)
+            .build();
     }
 
     @Before
