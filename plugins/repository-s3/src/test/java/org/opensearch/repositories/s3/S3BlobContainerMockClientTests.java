@@ -13,15 +13,14 @@ import org.junit.After;
 import org.junit.Before;
 import org.mockito.invocation.InvocationOnMock;
 import org.opensearch.cluster.metadata.RepositoryMetadata;
-import org.opensearch.common.io.InputStreamContainer;
-import org.opensearch.common.StreamContext;
 import org.opensearch.common.CheckedTriFunction;
+import org.opensearch.common.StreamContext;
 import org.opensearch.common.blobstore.BlobPath;
 import org.opensearch.common.blobstore.stream.write.StreamContextSupplier;
 import org.opensearch.common.blobstore.stream.write.WriteContext;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
-import org.opensearch.common.blobstore.transfer.UploadFinalizer;
 import org.opensearch.common.blobstore.transfer.stream.OffsetRangeIndexInputStream;
+import org.opensearch.common.io.InputStreamContainer;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.ByteSizeValue;
@@ -58,6 +57,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doAnswer;
@@ -455,9 +455,9 @@ public class S3BlobContainerMockClientTests extends OpenSearchTestCase implement
                         }
                     }, partSize, calculateLastPartSize(bytes.length, partSize), calculateNumberOfParts(bytes.length, partSize));
                 }
-            }, bytes.length, false, WritePriority.NORMAL, new UploadFinalizer() {
+            }, bytes.length, false, WritePriority.NORMAL, new Consumer<Boolean>() {
                 @Override
-                public void accept(boolean uploadSuccess) {
+                public void accept(Boolean uploadSuccess) {
                     assertTrue(uploadSuccess);
                     if (throwExceptionOnFinalizeUpload) {
                         throw new RuntimeException();
@@ -506,9 +506,9 @@ public class S3BlobContainerMockClientTests extends OpenSearchTestCase implement
                         }
                     }, partSize, calculateLastPartSize(blobSize, partSize), calculateNumberOfParts(blobSize, partSize));
                 }
-            }, blobSize, false, WritePriority.HIGH, new UploadFinalizer() {
+            }, blobSize, false, WritePriority.HIGH, new Consumer<Boolean>() {
                 @Override
-                public void accept(boolean uploadSuccess) {
+                public void accept(Boolean uploadSuccess) {
                     assertTrue(uploadSuccess);
                     if (throwExceptionOnFinalizeUpload) {
                         throw new RuntimeException();

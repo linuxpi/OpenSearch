@@ -35,20 +35,19 @@ import org.apache.http.HttpStatus;
 import org.junit.After;
 import org.junit.Before;
 import org.opensearch.cluster.metadata.RepositoryMetadata;
+import org.opensearch.common.CheckedTriFunction;
 import org.opensearch.common.Nullable;
-import org.opensearch.common.io.InputStreamContainer;
 import org.opensearch.common.StreamContext;
 import org.opensearch.common.SuppressForbidden;
-import org.opensearch.common.CheckedTriFunction;
 import org.opensearch.common.blobstore.BlobContainer;
 import org.opensearch.common.blobstore.BlobPath;
 import org.opensearch.common.blobstore.stream.write.StreamContextSupplier;
 import org.opensearch.common.blobstore.stream.write.WriteContext;
 import org.opensearch.common.blobstore.stream.write.WritePriority;
-import org.opensearch.common.blobstore.transfer.UploadFinalizer;
 import org.opensearch.common.blobstore.transfer.stream.OffsetRangeIndexInputStream;
 import org.opensearch.common.bytes.BytesReference;
 import org.opensearch.common.hash.MessageDigests;
+import org.opensearch.common.io.InputStreamContainer;
 import org.opensearch.common.io.Streams;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.common.lucene.store.InputStreamIndexInput;
@@ -61,13 +60,13 @@ import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.CountDown;
 import org.opensearch.common.util.io.IOUtils;
 import org.opensearch.repositories.blobstore.AbstractBlobContainerRetriesTestCase;
-import software.amazon.awssdk.core.exception.SdkClientException;
-import software.amazon.awssdk.core.io.SdkDigestInputStream;
-import software.amazon.awssdk.utils.internal.Base16;
+import org.opensearch.repositories.blobstore.ZeroInputStream;
 import org.opensearch.repositories.s3.async.AsyncExecutorBuilder;
 import org.opensearch.repositories.s3.async.AsyncUploadUtils;
 import org.opensearch.repositories.s3.async.TransferNIOGroup;
-import org.opensearch.repositories.blobstore.ZeroInputStream;
+import software.amazon.awssdk.core.exception.SdkClientException;
+import software.amazon.awssdk.core.io.SdkDigestInputStream;
+import software.amazon.awssdk.utils.internal.Base16;
 
 import java.io.ByteArrayInputStream;
 import java.io.FilterInputStream;
@@ -84,6 +83,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static org.hamcrest.Matchers.anyOf;
 import static org.hamcrest.Matchers.containsString;
@@ -334,9 +334,9 @@ public class S3BlobContainerRetriesTests extends AbstractBlobContainerRetriesTes
                         }
                     }, partSize, calculateLastPartSize(bytes.length, partSize), calculateNumberOfParts(bytes.length, partSize));
                 }
-            }, bytes.length, false, WritePriority.NORMAL, new UploadFinalizer() {
+            }, bytes.length, false, WritePriority.NORMAL, new Consumer<Boolean>() {
                 @Override
-                public void accept(boolean uploadSuccess) {
+                public void accept(Boolean uploadSuccess) {
                     assertTrue(uploadSuccess);
                 }
             }, false, null)

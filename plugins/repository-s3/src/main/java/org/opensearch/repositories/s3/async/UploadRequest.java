@@ -9,7 +9,8 @@
 package org.opensearch.repositories.s3.async;
 
 import org.opensearch.common.blobstore.stream.write.WritePriority;
-import org.opensearch.common.blobstore.transfer.UploadFinalizer;
+
+import java.util.function.Consumer;
 
 /**
  * A model encapsulating all details for an upload to S3
@@ -19,7 +20,7 @@ public class UploadRequest {
     private final String key;
     private final long contentLength;
     private final WritePriority writePriority;
-    private final UploadFinalizer uploadFinalizer;
+    private final Consumer<Boolean> uploadFinalizer;
     private final boolean doRemoteDataIntegrityCheck;
     private final Long expectedChecksum;
 
@@ -39,7 +40,7 @@ public class UploadRequest {
         String key,
         long contentLength,
         WritePriority writePriority,
-        UploadFinalizer uploadFinalizer,
+        Consumer<Boolean> uploadFinalizer,
         boolean doRemoteDataIntegrityCheck,
         Long expectedChecksum
     ) {
@@ -68,7 +69,7 @@ public class UploadRequest {
         return writePriority;
     }
 
-    public UploadFinalizer getUploadFinalizer() {
+    public Consumer<Boolean> getUploadFinalizer() {
         return uploadFinalizer;
     }
 
