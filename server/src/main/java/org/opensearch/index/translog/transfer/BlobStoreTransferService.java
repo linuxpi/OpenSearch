@@ -20,7 +20,6 @@ import org.opensearch.common.blobstore.stream.write.WritePriority;
 import org.opensearch.common.blobstore.transfer.RemoteTransferContainer;
 import org.opensearch.common.blobstore.transfer.stream.OffsetRangeFileInputStream;
 import org.opensearch.index.translog.ChannelFactory;
-import org.opensearch.index.translog.checked.TranslogCheckedContainer;
 import org.opensearch.index.translog.transfer.FileSnapshot.TransferFileSnapshot;
 import org.opensearch.threadpool.ThreadPool;
 
@@ -141,8 +140,7 @@ public class BlobStoreTransferService implements TransferService {
                 writePriority,
                 (size, position) -> new OffsetRangeFileInputStream(fileSnapshot.getPath(), size, position),
                 expectedChecksum,
-                blobStore.blobContainer(blobPath).isRemoteDataIntegritySupported(),
-                false
+                blobStore.blobContainer(blobPath).isRemoteDataIntegritySupported()
             );
             WriteContext writeContext = remoteTransferContainer.createWriteContext();
             CompletableFuture<Void> uploadFuture = blobStore.blobContainer(blobPath).writeBlobByStreams(writeContext);
