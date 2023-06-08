@@ -163,8 +163,12 @@ public final class AsyncUploadUtils {
         }
 
         CompletableFutureUtils.allOfExceptionForwarded(futures.toArray(CompletableFuture[]::new)).thenApply(resp -> {
-            uploadRequest.getUploadFinalizer().accept(true);
-            return resp;
+                try {
+                    uploadRequest.getUploadFinalizer().accept(true);
+                } catch (IOException e) {
+                    throw new RuntimeException(e);
+                }
+                return resp;
         })
             .thenApply(ignore -> {
                 if (uploadRequest.doRemoteDataIntegrityCheck()) {
@@ -431,7 +435,11 @@ public final class AsyncUploadUtils {
                     }
                     returnFuture.completeExceptionally(throwable);
                 } else {
-                    uploadRequest.getUploadFinalizer().accept(true);
+                    try {
+                        uploadRequest.getUploadFinalizer().accept(true);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
                     returnFuture.complete(null);
                 }
 
