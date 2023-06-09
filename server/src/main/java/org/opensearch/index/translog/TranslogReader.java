@@ -33,10 +33,14 @@
 package org.opensearch.index.translog;
 
 import org.apache.lucene.store.AlreadyClosedException;
+import org.apache.lucene.store.OutputStreamDataOutput;
+import org.opensearch.common.Nullable;
 import org.opensearch.common.io.Channels;
 import org.opensearch.common.util.io.IOUtils;
 import org.opensearch.index.seqno.SequenceNumbers;
+import org.opensearch.index.translog.checked.TranslogCheckedContainer;
 
+import java.io.ByteArrayOutputStream;
 import java.io.Closeable;
 import java.io.EOFException;
 import java.io.IOException;
@@ -59,6 +63,11 @@ public class TranslogReader extends BaseTranslogReader implements Closeable {
     private final Checkpoint checkpoint;
     protected final AtomicBoolean closed = new AtomicBoolean(false);
 
+    @Nullable
+    private final Long translogChecksum;
+    @Nullable
+    private final Long checkpointChecksum;
+
     /**
      * Create a translog writer against the specified translog file channel.
      *
@@ -67,11 +76,34 @@ public class TranslogReader extends BaseTranslogReader implements Closeable {
      * @param path       the path to the translog
      * @param header     the header of the translog file
      */
-    TranslogReader(final Checkpoint checkpoint, final FileChannel channel, final Path path, final TranslogHeader header) {
+    TranslogReader(
+        final Checkpoint checkpoint,
+        final FileChannel channel,
+        final Path path,
+        final TranslogHeader header,
+        final Long translogChecksum
+    ) throws IOException {
         super(checkpoint.generation, channel, path, header);
         this.length = checkpoint.offset;
         this.totalOperations = checkpoint.numOps;
         this.checkpoint = checkpoint;
+        this.translogChecksum = translogChecksum;
+        this.checkpointChecksum = (translogChecksum != null) ? calculateCheckpointChecksum(checkpoint, path) : null;
+    }
+
+    private static Long calculateCheckpointChecksum(Checkpoint checkpoint, Path path) throws IOException {
+        TranslogCheckedContainer checkpointCheckedContainer = new TranslogCheckedContainer(
+            Checkpoint.createCheckpointBytes(path.getParent().resolve(Translog.CHECKPOINT_FILE_NAME), checkpoint)
+        );
+        return checkpointCheckedContainer.getChecksum();
+    }
+
+    public Long getTranslogChecksum() {
+        return translogChecksum;
+    }
+
+    public Long getCheckpointChecksum() {
+        return checkpointChecksum;
     }
 
     /**
@@ -87,7 +119,7 @@ public class TranslogReader extends BaseTranslogReader implements Closeable {
     public static TranslogReader open(final FileChannel channel, final Path path, final Checkpoint checkpoint, final String translogUUID)
         throws IOException {
         final TranslogHeader header = TranslogHeader.read(translogUUID, path, channel);
-        return new TranslogReader(checkpoint, channel, path, header);
+        return new TranslogReader(checkpoint, channel, path, header, null);
     }
 
     /**
@@ -115,9 +147,9 @@ public class TranslogReader extends BaseTranslogReader implements Closeable {
 
                     IOUtils.fsync(checkpointFile.getParent(), true);
 
-                    newReader = new TranslogReader(newCheckpoint, channel, path, header);
+                    newReader = new TranslogReader(newCheckpoint, channel, path, header, translogChecksum);
                 } else {
-                    newReader = new TranslogReader(checkpoint, channel, path, header);
+                    newReader = new TranslogReader(checkpoint, channel, path, header, translogChecksum);
                 }
                 toCloseOnFailure = null;
                 return newReader;

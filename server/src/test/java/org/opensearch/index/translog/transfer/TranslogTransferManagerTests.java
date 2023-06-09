@@ -145,13 +145,15 @@ public class TranslogTransferManagerTests extends OpenSearchTestCase {
                             primaryTerm,
                             generation,
                             minTranslogGeneration,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.CHECKPOINT_SUFFIX)
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.CHECKPOINT_SUFFIX),
+                            null
                         ),
                         new CheckpointFileSnapshot(
                             primaryTerm,
                             generation,
                             minTranslogGeneration,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.CHECKPOINT_SUFFIX)
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.CHECKPOINT_SUFFIX),
+                            null
                         )
                     );
                 } catch (IOException e) {
@@ -166,12 +168,14 @@ public class TranslogTransferManagerTests extends OpenSearchTestCase {
                         new TranslogFileSnapshot(
                             primaryTerm,
                             generation,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.TRANSLOG_FILE_SUFFIX)
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + generation, Translog.TRANSLOG_FILE_SUFFIX),
+                            null
                         ),
                         new TranslogFileSnapshot(
                             primaryTerm,
                             generation - 1,
-                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.TRANSLOG_FILE_SUFFIX)
+                            createTempFile(Translog.TRANSLOG_FILE_PREFIX + (generation - 1), Translog.TRANSLOG_FILE_SUFFIX),
+                            null
                         )
                     );
                 } catch (IOException e) {
