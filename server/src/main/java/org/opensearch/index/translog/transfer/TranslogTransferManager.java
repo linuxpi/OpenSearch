@@ -116,14 +116,15 @@ public class TranslogTransferManager {
                 )
             );
 
+            logger.info("[[PERF RUNS]] start upload for shard " + shardId + " --- " + System.currentTimeMillis());
             transferService.uploadBlobs(toUpload, blobPathMap, latchedActionListener, WritePriority.HIGH);
-
             try {
                 if (latch.await(TRANSFER_TIMEOUT_IN_MILLIS, TimeUnit.MILLISECONDS) == false) {
                     Exception ex = new TimeoutException("Timed out waiting for transfer of snapshot " + transferSnapshot + " to complete");
                     exceptionList.forEach(ex::addSuppressed);
                     throw ex;
                 }
+                logger.info("[[PERF RUNS]] end upload for shard " + shardId + " --- " + System.currentTimeMillis());
             } catch (InterruptedException ex) {
                 exceptionList.forEach(ex::addSuppressed);
                 Thread.currentThread().interrupt();
