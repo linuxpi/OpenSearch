@@ -8,6 +8,7 @@
 
 package org.opensearch.common.util.concurrent;
 
+import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
@@ -31,6 +32,7 @@ import java.util.function.Consumer;
  */
 public abstract class BufferedAsyncIOProcessor<Item> extends AsyncIOProcessor<Item> {
 
+    private static final Logger logger = LogManager.getLogger(BufferedAsyncIOProcessor.class);
     private final ThreadPool threadpool;
     private final TimeValue bufferInterval;
 
@@ -76,8 +78,10 @@ public abstract class BufferedAsyncIOProcessor<Item> extends AsyncIOProcessor<It
     }
 
     private void process() {
+        long startTimeNs = System.nanoTime();
         drainAndProcessAndRelease(new ArrayList<>());
         scheduleProcess();
+        logger.info("[[PERF RUNS]] total tlog buffer flush time " + " --- " + (System.nanoTime() - startTimeNs));
     }
 
     private TimeValue getBufferInterval() {
