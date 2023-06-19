@@ -463,6 +463,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
 
             @Override
             protected void doRun() throws Exception {
+                long startTime = System.nanoTime();
                 while (context.hasMoreOperationsToExecute()) {
                     if (executeBulkItemRequest(
                         context,
@@ -480,6 +481,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
                 }
                 // We're done, there's no more operations to execute so we resolve the wrapped listener
                 finishRequest();
+                logger.info("[Perf Runs] Shard primary operation time - " + (System.nanoTime() - startTime));
             }
 
             @Override
@@ -560,7 +562,6 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
         Consumer<ActionListener<Void>> waitForMappingUpdate,
         ActionListener<Void> itemDoneListener
     ) throws Exception {
-        long startTime = System.nanoTime();
         final DocWriteRequest.OpType opType = context.getCurrent().opType();
 
         final UpdateHelper.Result updateResult;
@@ -674,7 +675,6 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
         } else {
             onComplete(result, context, updateResult);
         }
-        logger.info("[PERF RUN] Shard primary operation time - " +  (System.nanoTime() - startTime));
         return true;
     }
 
