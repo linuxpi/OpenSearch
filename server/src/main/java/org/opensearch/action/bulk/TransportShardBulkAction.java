@@ -560,6 +560,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
         Consumer<ActionListener<Void>> waitForMappingUpdate,
         ActionListener<Void> itemDoneListener
     ) throws Exception {
+        long startTime = System.nanoTime();
         final DocWriteRequest.OpType opType = context.getCurrent().opType();
 
         final UpdateHelper.Result updateResult;
@@ -673,6 +674,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
         } else {
             onComplete(result, context, updateResult);
         }
+        logger.info("[PERF RUN] Shard primary operation time - " +  (System.nanoTime() - startTime));
         return true;
     }
 
@@ -816,6 +818,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
     }
 
     public static Translog.Location performOnReplica(BulkShardRequest request, IndexShard replica) throws Exception {
+        long startTime = System.nanoTime();
         Translog.Location location = null;
         for (int i = 0; i < request.items().length; i++) {
             final BulkItemRequest item = request.items()[i];
@@ -848,6 +851,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
             assert operationResult != null : "operation result must never be null when primary response has no failure";
             location = syncOperationResultOrThrow(operationResult, location);
         }
+        logger.info("[PERF RUN] Shard replica operation time - " +  (System.nanoTime() - startTime));
         return location;
     }
 
