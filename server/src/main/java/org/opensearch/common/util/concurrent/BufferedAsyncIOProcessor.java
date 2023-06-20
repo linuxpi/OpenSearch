@@ -81,7 +81,7 @@ public abstract class BufferedAsyncIOProcessor<Item> extends AsyncIOProcessor<It
         long startTimeNs = System.nanoTime();
         drainAndProcessAndRelease(new ArrayList<>());
         scheduleProcess();
-        logger.info("[[PERF RUNS]] total tlog buffer flush time " + " --- " + (System.nanoTime() - startTimeNs));
+        logger.info("[[PERF RUNS]] total tlog buffer flush time " + " --- " + ((System.nanoTime() - startTimeNs) / 1_000_000L) + " for total items ---- " + getQueue().size());
     }
 
     private TimeValue getBufferInterval() {
