@@ -481,7 +481,7 @@ public class TransportShardBulkAction extends TransportWriteAction<BulkShardRequ
                 }
                 // We're done, there's no more operations to execute so we resolve the wrapped listener
                 finishRequest();
-                logger.info("[Perf Runs] Shard primary operation time - " + (System.nanoTime() - startTime));
+                logger.info("[Perf Runs] Shard primary operation time - " + (System.nanoTime() - startTime) / 1_000_000L);
             }
 
             @Override

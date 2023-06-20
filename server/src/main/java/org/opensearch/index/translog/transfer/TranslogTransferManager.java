@@ -124,7 +124,7 @@ public class TranslogTransferManager {
                     exceptionList.forEach(ex::addSuppressed);
                     throw ex;
                 }
-                logger.info("[[PERF RUNS]] total translog upload for shard " + shardId + " --- " + (System.nanoTime() - uploadStartTime));
+                logger.info("[[PERF RUNS]] total translog upload for shard " + shardId + " --- " + (System.nanoTime() - uploadStartTime) / 1_000_000L);
             } catch (InterruptedException ex) {
                 exceptionList.forEach(ex::addSuppressed);
                 Thread.currentThread().interrupt();
@@ -132,7 +132,7 @@ public class TranslogTransferManager {
             }
             if (exceptionList.isEmpty()) {
                 transferService.uploadBlob(prepareMetadata(transferSnapshot), remoteMetadataTransferPath, WritePriority.HIGH);
-                logger.info("[[PERF RUNS]] total translog upload for shard with metadata " + shardId + " --- " + (System.nanoTime() - uploadStartTime));
+                logger.info("[[PERF RUNS]] total translog upload for shard with metadata " + shardId + " --- " + (System.nanoTime() - uploadStartTime) / 1_000_000L);
                 translogTransferListener.onUploadComplete(transferSnapshot);
                 return true;
             } else {
