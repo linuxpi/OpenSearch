@@ -179,6 +179,8 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
         if (indexShard.getReplicationTracker().isPrimaryMode() == false) {
             return;
         }
+        ReplicationCheckpoint checkpoint = indexShard.getLatestReplicationCheckpoint();
+        indexShard.onCheckpointPublished(checkpoint);
         beforeSegmentsSync(isRetry);
         long refreshTimeMs = segmentTracker.getLocalRefreshTimeMs(), refreshSeqNo = segmentTracker.getLocalRefreshSeqNo();
         long bytesBeforeUpload = segmentTracker.getUploadBytesSucceeded(), startTimeInNS = System.nanoTime();
@@ -202,7 +204,6 @@ public final class RemoteStoreRefreshListener implements ReferenceManager.Refres
                     SegmentInfos segmentInfos = segmentInfosGatedCloseable.get();
                     // Capture replication checkpoint before uploading the segments as upload can take some time and checkpoint can
                     // move.
-                    ReplicationCheckpoint checkpoint = indexShard.getLatestReplicationCheckpoint();
                     long lastRefreshedCheckpoint = ((InternalEngine) indexShard.getEngine()).lastRefreshedCheckpoint();
                     Collection<String> localSegmentsPostRefresh = segmentInfos.files(true);
 
