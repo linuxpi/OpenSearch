@@ -21,7 +21,6 @@ import org.opensearch.index.shard.RemoteStoreRefreshListenerTests;
 import org.opensearch.index.store.RemoteSegmentStoreDirectory;
 import org.opensearch.index.store.Store;
 import org.opensearch.indices.replication.checkpoint.ReplicationCheckpoint;
-import org.opensearch.indices.replication.common.ReplicationType;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -45,13 +44,9 @@ public class RemoteStoreReplicationSourceTests extends OpenSearchIndexLevelRepli
     @Override
     public void setUp() throws Exception {
         super.setUp();
-
         indexShard = newStartedShard(
             true,
-            Settings.builder()
-                .put(IndexMetadata.SETTING_REMOTE_STORE_ENABLED, true)
-                .put(IndexMetadata.SETTING_REPLICATION_TYPE, ReplicationType.SEGMENT)
-                .build(),
+            Settings.builder().put(IndexMetadata.SETTING_REMOTE_STORE_ENABLED, true).build(),
             new InternalEngineFactory()
         );
 
