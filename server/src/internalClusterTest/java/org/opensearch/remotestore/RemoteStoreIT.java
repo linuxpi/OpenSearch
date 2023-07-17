@@ -112,13 +112,9 @@ public class RemoteStoreIT extends RemoteStoreBaseIntegTestCase {
         assertHitCount(client().prepareSearch(INDEX_NAME).setSize(0).get(), indexStats.get(statsGranularity) + 1);
     }
 
-    private void testRestoreFlow(boolean remoteTranslog, int numberOfIterations, boolean invokeFlush) throws IOException {
+    private void testRestoreFlow(int numberOfIterations, boolean invokeFlush) throws IOException {
         internalCluster().startDataOnlyNodes(3);
-        if (remoteTranslog) {
-            createIndex(INDEX_NAME, remoteTranslogIndexSettings(0));
-        } else {
-            createIndex(INDEX_NAME, remoteStoreIndexSettings(0));
-        }
+        createIndex(INDEX_NAME, remoteStoreIndexSettings(0));
         ensureYellowAndNoInitializingShards(INDEX_NAME);
         ensureGreen(INDEX_NAME);
 
@@ -130,53 +126,29 @@ public class RemoteStoreIT extends RemoteStoreBaseIntegTestCase {
         client().admin().cluster().restoreRemoteStore(new RestoreRemoteStoreRequest().indices(INDEX_NAME), PlainActionFuture.newFuture());
         ensureGreen(INDEX_NAME);
 
-        if (remoteTranslog) {
-            verifyRestoredData(indexStats, true);
-        } else {
-            verifyRestoredData(indexStats, false);
-        }
-    }
-
-    public void testRemoteSegmentStoreRestoreWithNoDataPostCommit() throws IOException {
-        testRestoreFlow(false, 1, true);
-    }
-
-    public void testRemoteSegmentStoreRestoreWithNoDataPostRefresh() throws IOException {
-        testRestoreFlow(false, 1, false);
-    }
-
-    public void testRemoteSegmentStoreRestoreWithRefreshedData() throws IOException {
-        testRestoreFlow(false, randomIntBetween(2, 5), false);
-    }
-
-    public void testRemoteSegmentStoreRestoreWithCommittedData() throws IOException {
-        testRestoreFlow(false, randomIntBetween(2, 5), true);
+        verifyRestoredData(indexStats, true);
     }
 
     @AwaitsFix(bugUrl = "https://github.com/opensearch-project/OpenSearch/issues/6188")
     public void testRemoteTranslogRestoreWithNoDataPostCommit() throws IOException {
-        testRestoreFlow(true, 1, true);
+        testRestoreFlow(1, true);
     }
 
     public void testRemoteTranslogRestoreWithNoDataPostRefresh() throws IOException {
-        testRestoreFlow(true, 1, false);
+        testRestoreFlow(1, false);
     }
 
     public void testRemoteTranslogRestoreWithRefreshedData() throws IOException {
-        testRestoreFlow(true, randomIntBetween(2, 5), false);
+        testRestoreFlow(randomIntBetween(2, 5), false);
     }
 
     public void testRemoteTranslogRestoreWithCommittedData() throws IOException {
-        testRestoreFlow(true, randomIntBetween(2, 5), true);
+        testRestoreFlow(randomIntBetween(2, 5), true);
     }
 
-    private void testPeerRecovery(boolean remoteTranslog, int numberOfIterations, boolean invokeFlush) throws Exception {
+    private void testPeerRecovery(int numberOfIterations, boolean invokeFlush) throws Exception {
         internalCluster().startDataOnlyNodes(3);
-        if (remoteTranslog) {
-            createIndex(INDEX_NAME, remoteTranslogIndexSettings(0));
-        } else {
-            createIndex(INDEX_NAME, remoteStoreIndexSettings(0));
-        }
+        createIndex(INDEX_NAME, remoteStoreIndexSettings(0));
         ensureYellowAndNoInitializingShards(INDEX_NAME);
         ensureGreen(INDEX_NAME);
 
@@ -223,45 +195,25 @@ public class RemoteStoreIT extends RemoteStoreBaseIntegTestCase {
         );
     }
 
-    public void testPeerRecoveryWithRemoteStoreNoRemoteTranslogNoDataFlush() throws Exception {
-        testPeerRecovery(false, 1, true);
-    }
-
-    public void testPeerRecoveryWithRemoteStoreNoRemoteTranslogFlush() throws Exception {
-        testPeerRecovery(false, randomIntBetween(2, 5), true);
-    }
-
-    public void testPeerRecoveryWithRemoteStoreNoRemoteTranslogNoDataRefresh() throws Exception {
-        testPeerRecovery(false, 1, false);
-    }
-
-    public void testPeerRecoveryWithRemoteStoreNoRemoteTranslogRefresh() throws Exception {
-        testPeerRecovery(false, randomIntBetween(2, 5), false);
-    }
-
     public void testPeerRecoveryWithRemoteStoreAndRemoteTranslogNoDataFlush() throws Exception {
-        testPeerRecovery(true, 1, true);
+        testPeerRecovery(1, true);
     }
 
     public void testPeerRecoveryWithRemoteStoreAndRemoteTranslogFlush() throws Exception {
-        testPeerRecovery(true, randomIntBetween(2, 5), true);
+        testPeerRecovery(randomIntBetween(2, 5), true);
     }
 
     public void testPeerRecoveryWithRemoteStoreAndRemoteTranslogNoDataRefresh() throws Exception {
-        testPeerRecovery(true, 1, false);
+        testPeerRecovery(1, false);
     }
 
     public void testPeerRecoveryWithRemoteStoreAndRemoteTranslogRefresh() throws Exception {
-        testPeerRecovery(true, randomIntBetween(2, 5), false);
+        testPeerRecovery(randomIntBetween(2, 5), false);
     }
 
-    private void verifyRemoteStoreCleanup(boolean remoteTranslog) throws Exception {
+    private void verifyRemoteStoreCleanup() throws Exception {
         internalCluster().startDataOnlyNodes(3);
-        if (remoteTranslog) {
-            createIndex(INDEX_NAME, remoteTranslogIndexSettings(1));
-        } else {
-            createIndex(INDEX_NAME, remoteStoreIndexSettings(1));
-        }
+        createIndex(INDEX_NAME, remoteStoreIndexSettings(1));
 
         indexData(5, randomBoolean());
         String indexUUID = client().admin()
@@ -280,12 +232,8 @@ public class RemoteStoreIT extends RemoteStoreBaseIntegTestCase {
         }, 30, TimeUnit.SECONDS);
     }
 
-    public void testRemoteSegmentCleanup() throws Exception {
-        verifyRemoteStoreCleanup(false);
-    }
-
     public void testRemoteTranslogCleanup() throws Exception {
-        verifyRemoteStoreCleanup(true);
+        verifyRemoteStoreCleanup();
     }
 
     public void testStaleCommitDeletionWithInvokeFlush() throws Exception {
