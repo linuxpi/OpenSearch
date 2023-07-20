@@ -954,44 +954,21 @@ public class MetadataCreateIndexService {
         if (CLUSTER_REMOTE_STORE_ENABLED_SETTING.get(clusterSettings)) {
             // Verify if we can create a remote store based index based on user provided settings
             if (canCreateRemoteStoreIndex(requestSettings) == false) {
-                return;
+                throw new IllegalArgumentException("Cannot override settings related to remote store.");
             }
 
-            // Verify index has replication type as SEGMENT
-            if (ReplicationType.DOCUMENT.equals(ReplicationType.parseString(settingsBuilder.get(SETTING_REPLICATION_TYPE)))) {
-                throw new IllegalArgumentException(
-                    "Cannot enable ["
-                        + SETTING_REMOTE_STORE_ENABLED
-                        + "] when ["
-                        + SETTING_REPLICATION_TYPE
-                        + "] is "
-                        + ReplicationType.DOCUMENT
-                );
-            }
-
-            settingsBuilder.put(SETTING_REMOTE_STORE_ENABLED, true);
-            String remoteStoreRepo;
-            if (Objects.equals(requestSettings.get(INDEX_REMOTE_STORE_ENABLED_SETTING.getKey()), "true")) {
-                remoteStoreRepo = requestSettings.get(INDEX_REMOTE_STORE_REPOSITORY_SETTING.getKey());
-            } else {
-                remoteStoreRepo = CLUSTER_REMOTE_STORE_REPOSITORY_SETTING.get(clusterSettings);
-            }
-            settingsBuilder.put(SETTING_REMOTE_STORE_REPOSITORY, remoteStoreRepo)
-                .put(
-                    SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY,
-                    requestSettings.get(
-                        INDEX_REMOTE_TRANSLOG_REPOSITORY_SETTING.getKey(),
-                        CLUSTER_REMOTE_TRANSLOG_REPOSITORY_SETTING.get(clusterSettings)
-                    )
-                );
+            settingsBuilder.put(SETTING_REMOTE_STORE_ENABLED, true)
+                .put(SETTING_REMOTE_STORE_REPOSITORY, CLUSTER_REMOTE_STORE_REPOSITORY_SETTING.get(clusterSettings))
+                .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, CLUSTER_REMOTE_TRANSLOG_REPOSITORY_SETTING.get(clusterSettings));
         }
     }
 
     private static boolean canCreateRemoteStoreIndex(Settings requestSettings) {
         return (INDEX_REPLICATION_TYPE_SETTING.exists(requestSettings) == false
             || INDEX_REPLICATION_TYPE_SETTING.get(requestSettings).equals(ReplicationType.SEGMENT))
-            && (INDEX_REMOTE_STORE_ENABLED_SETTING.exists(requestSettings) == false
-                || INDEX_REMOTE_STORE_ENABLED_SETTING.get(requestSettings));
+            && INDEX_REMOTE_STORE_ENABLED_SETTING.exists(requestSettings) == false
+            && INDEX_REMOTE_STORE_REPOSITORY_SETTING.exists(requestSettings) == false
+            && INDEX_REMOTE_TRANSLOG_REPOSITORY_SETTING.exists(requestSettings) == false;
     }
 
     public static void validateStoreTypeSettings(Settings settings) {
