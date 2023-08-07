@@ -43,6 +43,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -206,7 +207,7 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
                         }
                     }
                 }
-                validate(currentState, indexMetadataMap, true, request.restoreAllShards());
+                validate(currentState, indexMetadataMap, request.restoreAllShards());
                 return executeRestore(currentState, indexMetadataMap, request.restoreAllShards());
             }
 
@@ -232,27 +233,31 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
     private void validate(
         ClusterState currentState,
         Map<String, Tuple<Boolean, IndexMetadata>> indexMetadataMap,
-        boolean allowPartial,
         boolean restoreAllShards
     ) {
+        String errorMsg = "cannot restore index [%s] because an open index with same name already exists in the cluster.";
         for (Map.Entry<String, Tuple<Boolean, IndexMetadata>> indexMetadataEntry : indexMetadataMap.entrySet()) {
             String indexName = indexMetadataEntry.getKey();
             IndexMetadata indexMetadata = indexMetadataEntry.getValue().v2();
+            String indexUuid = indexMetadata.getIndexUUID();
             boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
                 if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState())) {
-                    String errorMsg = "cannot restore index ["
-                        + indexName
-                        + "] because an open index "
-                        + "with same name already exists in the cluster. Close the existing index";
-                    if (allowPartial) {
-                        throw new IllegalStateException(errorMsg);
-                    } else {
-                        logger.warn(errorMsg);
-                    }
+                    throw new IllegalArgumentException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
                 }
 
                 if (fromRemoteStore) {
+                    boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
+                    boolean sameUuidIndexExists = currentState.metadata()
+                        .indices()
+                        .values()
+                        .stream()
+                        .filter(indMd -> indMd.isSameUUID(indexUuid))
+                        .findFirst()
+                        .isEmpty();
+                    if (sameNameIndexExists || sameUuidIndexExists) {
+                        throw new IllegalArgumentException(String.format(Locale.ROOT, errorMsg, indexName));
+                    }
                     Version minIndexCompatibilityVersion = currentState.getNodes().getMaxNodeVersion().minimumIndexCompatibilityVersion();
                     metadataIndexUpgradeService.upgradeIndexMetadata(indexMetadata, minIndexCompatibilityVersion);
                     boolean isHidden = IndexMetadata.INDEX_HIDDEN_SETTING.get(indexMetadata.getSettings());
@@ -260,11 +265,9 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
                     createIndexService.validateDotIndex(indexName, isHidden);
                     createIndexService.validateIndexSettings(indexName, indexMetadata.getSettings(), false);
                 }
-                // TODO other validation will come here. still figuring out what else we need to validate
             } else {
                 logger.warn("Remote store is not enabled for index: {}", indexName);
             }
-
         }
     }
 }
