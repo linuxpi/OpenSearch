@@ -37,7 +37,6 @@ import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.indices.ShardLimitValidator;
 import org.opensearch.indices.replication.common.ReplicationType;
 import org.opensearch.repositories.IndexId;
-import org.opensearch.repositories.RepositoriesService;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -95,7 +94,7 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
      * @param request  restore request
      * @param listener restore listener
      */
-    public void restore(RestoreRemoteStoreRequest request, final ActionListener<RestoreCompletionResponse> listener) {
+    public void restore(RestoreRemoteStoreRequest request, final ActionListener<RestoreService.RestoreCompletionResponse> listener) {
         clusterService.submitStateUpdateTask("restore[remote_store]", new ClusterStateUpdateTask() {
             final String restoreUUID = UUIDs.randomBase64UUID();
             RestoreInfo restoreInfo = null;
@@ -239,29 +238,9 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
 
             @Override
             public void clusterStateProcessed(String source, ClusterState oldState, ClusterState newState) {
-                listener.onResponse(new RestoreCompletionResponse(restoreUUID, restoreInfo));
+                listener.onResponse(new RestoreService.RestoreCompletionResponse(restoreUUID, null, restoreInfo));
             }
         });
 
     }
-
-    // We can think of making this generic and use one in both RestoreService and RemoteStoreRestoreService
-    public static final class RestoreCompletionResponse {
-        private final String uuid;
-        private final RestoreInfo restoreInfo;
-
-        private RestoreCompletionResponse(final String uuid, final RestoreInfo restoreInfo) {
-            this.uuid = uuid;
-            this.restoreInfo = restoreInfo;
-        }
-
-        public String getUuid() {
-            return uuid;
-        }
-
-        public RestoreInfo getRestoreInfo() {
-            return restoreInfo;
-        }
-    }
-
 }
