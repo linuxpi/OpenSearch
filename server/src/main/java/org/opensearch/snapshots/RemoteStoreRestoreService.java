@@ -117,15 +117,16 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
                                 .put(SETTING_INDEX_UUID, "TLHafcwfTAazM5hFSFidyA")
                                 .put(SETTING_REPLICATION_TYPE, ReplicationType.SEGMENT)
                                 .put(SETTING_REMOTE_STORE_ENABLED, true)
-                                .put(SETTING_REMOTE_SEGMENT_STORE_REPOSITORY, "my-fs-repository")
-                                .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, "my-fs-repository")
+                                .put(SETTING_REMOTE_SEGMENT_STORE_REPOSITORY, "test-remote-store-repo")
+                                .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, "test-remote-store-repo")
                                 .put(SETTING_NUMBER_OF_SHARDS, 1)
                                 .put(SETTING_NUMBER_OF_REPLICAS, 0)
                                 .put(SETTING_VERSION_CREATED, "137217827")
                         )
                         .primaryTerm(0, 2)
                         .putMapping(
-                            "{\"_doc\":{\"properties\":{\"settings\":{\"properties\":{\"index\":{\"properties\":{\"number_of_replicas\":{\"type\":\"long\"},\"number_of_shards\":{\"type\":\"long\"},\"remote_store\":{\"properties\":{\"enabled\":{\"type\":\"boolean\"},\"repository\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\"translog\":{\"properties\":{\"buffer_interval\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\"enabled\":{\"type\":\"boolean\"},\"repository\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}},\"replication\":{\"properties\":{\"type\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}}}}}}}"
+                            // "{\"_doc\":{\"properties\":{\"settings\":{\"properties\":{\"index\":{\"properties\":{\"number_of_replicas\":{\"type\":\"long\"},\"number_of_shards\":{\"type\":\"long\"},\"remote_store\":{\"properties\":{\"enabled\":{\"type\":\"boolean\"},\"repository\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\"translog\":{\"properties\":{\"buffer_interval\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\"enabled\":{\"type\":\"boolean\"},\"repository\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}},\"replication\":{\"properties\":{\"type\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}}}}}}}"
+                            "{\"_doc\":{\"properties\":{\"varun\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}"
                         )
                         .build();
                 } catch (IOException e) {
@@ -194,7 +195,9 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
             @Override
             public ClusterState execute(ClusterState currentState) {
                 Map<String, Tuple<Boolean, IndexMetadata>> indexMetadataMap = new HashMap<>();
-                boolean isFullClusterRestore = false; // TODO will be controlled using request query param to be introduced in future
+                boolean isFullClusterRestore = (request.clusterUUID() == null
+                    || request.clusterUUID().isEmpty()
+                    || request.clusterUUID().isBlank()) == false;
                 if (isFullClusterRestore) {
                     indexMetadataMap.put("my-index-01", new Tuple<>(true, getRemoteIndexMetadata()));
                 } else {
@@ -242,8 +245,8 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
             String indexUuid = indexMetadata.getIndexUUID();
             boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
-                if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState())) {
-                    throw new IllegalArgumentException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
+                if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState()) == false) {
+                    throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
                 }
 
                 if (fromRemoteStore) {
@@ -252,11 +255,9 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
                         .indices()
                         .values()
                         .stream()
-                        .filter(indMd -> indMd.isSameUUID(indexUuid))
-                        .findFirst()
-                        .isEmpty();
+                        .anyMatch(indMd -> indMd.isSameUUID(indexUuid));
                     if (sameNameIndexExists || sameUuidIndexExists) {
-                        throw new IllegalArgumentException(String.format(Locale.ROOT, errorMsg, indexName));
+                        throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName));
                     }
                     Version minIndexCompatibilityVersion = currentState.getNodes().getMaxNodeVersion().minimumIndexCompatibilityVersion();
                     metadataIndexUpgradeService.upgradeIndexMetadata(indexMetadata, minIndexCompatibilityVersion);

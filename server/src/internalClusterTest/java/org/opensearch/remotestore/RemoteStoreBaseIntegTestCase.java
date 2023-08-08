@@ -110,7 +110,7 @@ public class RemoteStoreBaseIntegTestCase extends OpenSearchIntegTestCase {
     protected Settings nodeSettings(int nodeOrdinal) {
         return Settings.builder()
             .put(super.nodeSettings(nodeOrdinal))
-            .put(remoteStoreClusterSettings(REPOSITORY_NAME, REPOSITORY_2_NAME, true))
+            .put(remoteStoreClusterSettings(REPOSITORY_NAME, REPOSITORY_NAME, true))
             .build();
     }
 

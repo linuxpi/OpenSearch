@@ -37,6 +37,7 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
     private String[] indices = Strings.EMPTY_ARRAY;
     private Boolean waitForCompletion = false;
     private Boolean restoreAllShards = false;
+    private String clusterUUID = "";
 
     public RestoreRemoteStoreRequest() {}
 
@@ -45,6 +46,7 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
         indices = in.readStringArray();
         waitForCompletion = in.readOptionalBoolean();
         restoreAllShards = in.readOptionalBoolean();
+        clusterUUID = in.readOptionalString();
     }
 
     @Override
@@ -53,13 +55,17 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
         out.writeStringArray(indices);
         out.writeOptionalBoolean(waitForCompletion);
         out.writeOptionalBoolean(restoreAllShards);
+        out.writeOptionalString(clusterUUID);
     }
 
     @Override
     public ActionRequestValidationException validate() {
         ActionRequestValidationException validationException = null;
-        if (indices == null || indices.length == 0) {
+        if ((indices == null || indices.length == 0) && clusterUUID.isEmpty() == true) {
             validationException = addValidationError("indices are missing", validationException);
+        }
+        if (restoreAllShards == true && clusterUUID.isEmpty() == false) {
+            validationException = addValidationError("restoreAllShards cannot be true when clusterUUID is set", validationException);
         }
         return validationException;
     }
@@ -140,6 +146,26 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
      */
     public boolean restoreAllShards() {
         return restoreAllShards;
+    }
+
+    /**
+     * Set the value for clusterUUID, denoting whether to fetch cluster state from remote store
+     *
+     * @param clusterUUID uuid of the cluster used to generate the remote path
+     * @return this request
+     */
+    public RestoreRemoteStoreRequest clusterUUID(String clusterUUID) {
+        this.clusterUUID = clusterUUID;
+        return this;
+    }
+
+    /**
+     * Returns clusterUUID setting
+     *
+     * @return UUID of cluster used to generate remote path for cluster state
+     */
+    public String clusterUUID() {
+        return clusterUUID;
     }
 
     /**
