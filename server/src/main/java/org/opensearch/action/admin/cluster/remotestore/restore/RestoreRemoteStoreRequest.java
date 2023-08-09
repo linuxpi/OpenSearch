@@ -186,6 +186,8 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
                 } else {
                     throw new IllegalArgumentException("malformed indices section, should be an array of strings");
                 }
+            } else if (name.equals("clusterUUID")) {
+                clusterUUID((String) entry.getValue());
             } else {
                 if (IndicesOptions.isIndicesOptions(name) == false) {
                     throw new IllegalArgumentException("Unknown parameter " + name);
