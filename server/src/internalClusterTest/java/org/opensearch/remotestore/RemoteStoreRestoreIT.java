@@ -10,14 +10,20 @@ package org.opensearch.remotestore;
 
 import org.opensearch.action.admin.cluster.remotestore.restore.RestoreRemoteStoreRequest;
 import org.opensearch.action.admin.cluster.remotestore.restore.RestoreRemoteStoreResponse;
+import org.opensearch.action.admin.cluster.snapshots.create.CreateSnapshotResponse;
+import org.opensearch.action.admin.cluster.snapshots.restore.RestoreClusterStateListener;
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.PlainActionFuture;
+import org.opensearch.client.Client;
 import org.opensearch.cluster.health.ClusterHealthStatus;
+import org.opensearch.common.inject.Inject;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.repositories.blobstore.BlobStoreRepository;
+import org.opensearch.snapshots.RemoteStoreRestoreService;
+import org.opensearch.snapshots.SnapshotState;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.test.InternalTestCluster;
 import org.opensearch.test.OpenSearchIntegTestCase;
@@ -35,6 +41,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static java.nio.file.Files.move;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertHitCount;
 import static org.hamcrest.Matchers.greaterThan;
@@ -504,27 +512,31 @@ public class RemoteStoreRestoreIT extends RemoteStoreBaseIntegTestCase {
 
     // TODO: Restore flow - index aliases
 
-    public void testRestoreFlowFullClusterRestart() throws Exception {
-        int shardCount = 1;
+    public void testRestoreFlowFullClusterRestartZeroReplica() throws Exception {
+        int shardCount = randomIntBetween(1, 5);
         // Step - 1 index some data to generate files in remote directory
-        prepareCluster(0, 3, "my-index-01-orig", 0, shardCount);
-        Map<String, Long> indexStats = indexData(1, false, "my-index-01-orig");
-        assertEquals(shardCount, getNumShards("my-index-01-orig").totalNumShards);
-        ensureGreen("my-index-01-orig");
+        prepareCluster(0, 3, INDEX_NAME, 0, shardCount);
+        Map<String, Long> indexStats = indexData(1, false, INDEX_NAME);
+        assertEquals(shardCount, getNumShards(INDEX_NAME).totalNumShards);
+        ensureGreen(INDEX_NAME);
 
-        // Step - 2 copy the data generated in remote to a new indexuuid location. this indexuuid is the same uuid we get in remote
-        // IndexMetadata
+        // Step - 2 copy the data generated in remote to a new indexuuid location. this is the same uuid we get in remote IndexMetadata
+
+        // IndexUUID and index name used in dummy data supplied to RemoteStoreRestoreService during restore.
+        // This will be removed once we have the upload/download flow for remote cluster state ready.
+        String restoreIndexUUID = "TLHafcwfTAazM5hFSFidyA";
+        String restoreIndexName = "my-index-01";
         try {
             move(
-                absolutePath.resolve(clusterService().state().metadata().index("my-index-01-orig").getIndexUUID()),
-                absolutePath.resolve("TLHafcwfTAazM5hFSFidyA")
+                absolutePath.resolve(clusterService().state().metadata().index(INDEX_NAME).getIndexUUID()),
+                absolutePath.resolve(restoreIndexUUID)
             );
             move(
-                absolutePath2.resolve(clusterService().state().metadata().index("my-index-01-orig").getIndexUUID()),
-                absolutePath2.resolve("TLHafcwfTAazM5hFSFidyA")
+                absolutePath2.resolve(clusterService().state().metadata().index(INDEX_NAME).getIndexUUID()),
+                absolutePath2.resolve(restoreIndexUUID)
             );
         } catch (NoSuchFileException e) {
-            logger.info("using same repo");
+            logger.info("Used same repo for segments and translog");
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
@@ -532,11 +544,13 @@ public class RemoteStoreRestoreIT extends RemoteStoreBaseIntegTestCase {
         // Step - 3 Trigger full cluster restore
         client().admin()
             .cluster()
+            // Any sampleUUID would work as we are not integrated with remote cluster state repo in this test.
+            // We are mocking that interaction and supplying dummy index metadata
             .restoreRemoteStore(new RestoreRemoteStoreRequest().clusterUUID("sampleUUID"), PlainActionFuture.newFuture());
 
         // Step - 4 validation restore is successful.
-        ensureGreen("my-index-01");
-        assertEquals(getNumShards("my-index-01-orig").totalNumShards, getNumShards("my-index-01").totalNumShards);
-        verifyRestoredData(indexStats, "my-index-01");
+        ensureGreen(restoreIndexName);
+        assertEquals(getNumShards(INDEX_NAME).totalNumShards, getNumShards(restoreIndexName).totalNumShards);
+        verifyRestoredData(indexStats, restoreIndexName);
     }
 }
