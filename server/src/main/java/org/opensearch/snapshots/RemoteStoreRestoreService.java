@@ -13,8 +13,10 @@ import org.apache.logging.log4j.Logger;
 import org.opensearch.Version;
 import org.opensearch.action.ActionListener;
 import org.opensearch.action.admin.cluster.remotestore.restore.RestoreRemoteStoreRequest;
-import org.opensearch.action.admin.cluster.snapshots.restore.RestoreSnapshotRequest;
-import org.opensearch.cluster.*;
+import org.opensearch.cluster.ClusterState;
+import org.opensearch.cluster.ClusterStateApplier;
+import org.opensearch.cluster.ClusterChangedEvent;
+import org.opensearch.cluster.ClusterStateUpdateTask;
 import org.opensearch.cluster.block.ClusterBlocks;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.Metadata;
@@ -33,7 +35,6 @@ import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.index.shard.ShardId;
-import org.opensearch.index.shard.IndexShard;
 import org.opensearch.indices.ShardLimitValidator;
 import org.opensearch.indices.replication.common.ReplicationType;
 import org.opensearch.repositories.IndexId;
@@ -123,14 +124,13 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
                                 .put(SETTING_REMOTE_STORE_ENABLED, true)
                                 .put(SETTING_REMOTE_SEGMENT_STORE_REPOSITORY, "test-remote-store-repo")
                                 .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, "test-remote-store-repo")
-                                .put(SETTING_NUMBER_OF_SHARDS, 1)
+                                .put(SETTING_NUMBER_OF_SHARDS, 2)
                                 .put(SETTING_NUMBER_OF_REPLICAS, 0)
                                 .put(SETTING_VERSION_CREATED, "137217827")
                         )
                         .primaryTerm(0, 2)
                         .putMapping(
-                            // "{\"_doc\":{\"properties\":{\"settings\":{\"properties\":{\"index\":{\"properties\":{\"number_of_replicas\":{\"type\":\"long\"},\"number_of_shards\":{\"type\":\"long\"},\"remote_store\":{\"properties\":{\"enabled\":{\"type\":\"boolean\"},\"repository\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\"translog\":{\"properties\":{\"buffer_interval\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}},\"enabled\":{\"type\":\"boolean\"},\"repository\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}},\"replication\":{\"properties\":{\"type\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}}}}}}}"
-                            "{\"_doc\":{\"properties\":{\"varun\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}"
+                            "{\"_doc\":{\"properties\":{\"fixedKeyName\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}"
                         )
                         .build();
                 } catch (IOException e) {
@@ -255,12 +255,12 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
 
                 if (fromRemoteStore) {
                     boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
-                    boolean sameUuidIndexExists = currentState.metadata()
+                    boolean sameUUIDIndexExists = currentState.metadata()
                         .indices()
                         .values()
                         .stream()
                         .anyMatch(indMd -> indMd.isSameUUID(indexUuid));
-                    if (sameNameIndexExists || sameUuidIndexExists) {
+                    if (sameNameIndexExists || sameUUIDIndexExists) {
                         throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName));
                     }
                     Version minIndexCompatibilityVersion = currentState.getNodes().getMaxNodeVersion().minimumIndexCompatibilityVersion();
