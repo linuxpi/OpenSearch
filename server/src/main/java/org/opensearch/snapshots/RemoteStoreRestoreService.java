@@ -113,31 +113,6 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
             final String restoreUUID = UUIDs.randomBase64UUID();
             RestoreInfo restoreInfo = null;
 
-            private IndexMetadata getRemoteIndexMetadata() {
-                // Dummy data for initial testing
-                try {
-                    return IndexMetadata.builder("my-index-01")
-                        .settings(
-                            Settings.builder()
-                                .put(SETTING_INDEX_UUID, "TLHafcwfTAazM5hFSFidyA")
-                                .put(SETTING_REPLICATION_TYPE, ReplicationType.SEGMENT)
-                                .put(SETTING_REMOTE_STORE_ENABLED, true)
-                                .put(SETTING_REMOTE_SEGMENT_STORE_REPOSITORY, "test-remote-store-repo")
-                                .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, "test-remote-store-repo")
-                                .put(SETTING_NUMBER_OF_SHARDS, 2)
-                                .put(SETTING_NUMBER_OF_REPLICAS, 0)
-                                .put(SETTING_VERSION_CREATED, "137217827")
-                        )
-                        .primaryTerm(0, 2)
-                        .putMapping(
-                            "{\"_doc\":{\"properties\":{\"fixedKeyName\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}"
-                        )
-                        .build();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
-            }
-
             private ClusterState executeRestore(
                 ClusterState currentState,
                 Map<String, Tuple<Boolean, IndexMetadata>> indexMetadataMap,
@@ -273,6 +248,31 @@ public class RemoteStoreRestoreService implements ClusterStateApplier {
             } else {
                 logger.warn("Remote store is not enabled for index: {}", indexName);
             }
+        }
+    }
+
+    private IndexMetadata getRemoteIndexMetadata() {
+        // TODO - Dummy data for basic testing. To be replaced by Remote Cluster State download flow.
+        try {
+            return IndexMetadata.builder("my-index-01")
+                .settings(
+                    Settings.builder()
+                        .put(SETTING_INDEX_UUID, "TLHafcwfTAazM5hFSFidyA")
+                        .put(SETTING_REPLICATION_TYPE, ReplicationType.SEGMENT)
+                        .put(SETTING_REMOTE_STORE_ENABLED, true)
+                        .put(SETTING_REMOTE_SEGMENT_STORE_REPOSITORY, "test-remote-store-repo")
+                        .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, "test-remote-store-repo")
+                        .put(SETTING_NUMBER_OF_SHARDS, 2)
+                        .put(SETTING_NUMBER_OF_REPLICAS, 0)
+                        .put(SETTING_VERSION_CREATED, "137217827")
+                )
+                .primaryTerm(0, 2)
+                .putMapping(
+                    "{\"_doc\":{\"properties\":{\"fixedKeyName\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}"
+                )
+                .build();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }
