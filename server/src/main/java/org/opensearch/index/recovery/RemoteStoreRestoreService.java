@@ -27,18 +27,14 @@ import org.opensearch.cluster.routing.allocation.AllocationService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.collect.Tuple;
-import org.opensearch.common.settings.ClusterSettings;
-import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
 import org.opensearch.indices.ShardLimitValidator;
-import org.opensearch.indices.replication.common.ReplicationType;
 import org.opensearch.repositories.IndexId;
 import org.opensearch.snapshots.RestoreInfo;
 import org.opensearch.snapshots.RestoreService;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -47,14 +43,7 @@ import java.util.Map;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_INDEX_UUID;
 import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_REMOTE_STORE_ENABLED;
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_REPLICATION_TYPE;
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_NUMBER_OF_SHARDS;
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_NUMBER_OF_REPLICAS;
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_REMOTE_SEGMENT_STORE_REPOSITORY;
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY;
-import static org.opensearch.cluster.metadata.IndexMetadata.SETTING_VERSION_CREATED;
 
 /**
  * Service responsible for restoring index data from remote store
@@ -74,21 +63,17 @@ public class RemoteStoreRestoreService {
 
     private final ShardLimitValidator shardLimitValidator;
 
-    private final ClusterSettings clusterSettings;
-
     public RemoteStoreRestoreService(
         ClusterService clusterService,
         AllocationService allocationService,
         MetadataCreateIndexService createIndexService,
         MetadataIndexUpgradeService metadataIndexUpgradeService,
-        ClusterSettings clusterSettings,
         ShardLimitValidator shardLimitValidator
     ) {
         this.clusterService = clusterService;
         this.allocationService = allocationService;
         this.createIndexService = createIndexService;
         this.metadataIndexUpgradeService = metadataIndexUpgradeService;
-        this.clusterSettings = clusterService.getClusterSettings();
         this.shardLimitValidator = shardLimitValidator;
     }
 
@@ -176,11 +161,13 @@ public class RemoteStoreRestoreService {
             @Override
             public ClusterState execute(ClusterState currentState) {
                 Map<String, Tuple<Boolean, IndexMetadata>> indexMetadataMap = new HashMap<>();
-                boolean isFullClusterRestore = (request.clusterUUID() == null
+                boolean metadataFromRemoteStore = (request.clusterUUID() == null
                     || request.clusterUUID().isEmpty()
                     || request.clusterUUID().isBlank()) == false;
-                if (isFullClusterRestore) {
-                    indexMetadataMap.put("my-index-01", new Tuple<>(true, getRemoteIndexMetadata()));
+                if (metadataFromRemoteStore) {
+                    // TODO integrate with download flow
+                    // something like RemoteClusterStateService.getLatestIndexMetadata()
+                    // full integration PR used for testing - <add link>
                 } else {
                     for (String indexName : request.indices()) {
                         IndexMetadata indexMetadata = currentState.metadata().index(indexName);
@@ -246,35 +233,11 @@ public class RemoteStoreRestoreService {
                     createIndexService.validateIndexName(indexName, currentState);
                     createIndexService.validateDotIndex(indexName, isHidden);
                     createIndexService.validateIndexSettings(indexName, indexMetadata.getSettings(), false);
+                    shardLimitValidator.validateShardLimit(indexName, indexMetadata.getSettings(), currentState);
                 }
             } else {
                 logger.warn("Remote store is not enabled for index: {}", indexName);
             }
-        }
-    }
-
-    private IndexMetadata getRemoteIndexMetadata() {
-        // TODO - Dummy data for basic testing. To be replaced by Remote Cluster State download flow.
-        try {
-            return IndexMetadata.builder("my-index-01")
-                .settings(
-                    Settings.builder()
-                        .put(SETTING_INDEX_UUID, "TLHafcwfTAazM5hFSFidyA")
-                        .put(SETTING_REPLICATION_TYPE, ReplicationType.SEGMENT)
-                        .put(SETTING_REMOTE_STORE_ENABLED, true)
-                        .put(SETTING_REMOTE_SEGMENT_STORE_REPOSITORY, "test-remote-store-repo")
-                        .put(SETTING_REMOTE_TRANSLOG_STORE_REPOSITORY, "test-remote-store-repo")
-                        .put(SETTING_NUMBER_OF_SHARDS, 2)
-                        .put(SETTING_NUMBER_OF_REPLICAS, 0)
-                        .put(SETTING_VERSION_CREATED, "137217827")
-                )
-                .primaryTerm(0, 2)
-                .putMapping(
-                    "{\"_doc\":{\"properties\":{\"fixedKeyName\":{\"type\":\"text\",\"fields\":{\"keyword\":{\"type\":\"keyword\",\"ignore_above\":256}}}}}}"
-                )
-                .build();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 }
