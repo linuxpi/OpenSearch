@@ -512,12 +512,6 @@ public class RemoteStoreRestoreIT extends RemoteStoreBaseIntegTestCase {
 
     // TODO: Restore flow - index aliases
 
-    // TODO will be removed once we remote cluster state upload/download flow ready
-    @Override
-    protected IndexResponse indexSingleDoc(String indexName) {
-        return client().prepareIndex(indexName).setId(UUIDs.randomBase64UUID()).setSource("fixedKeyName", randomAlphaOfLength(5)).get();
-    }
-
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testRestoreFlowFullClusterRestartZeroReplica() throws Exception {
         int shardCount = 2;
