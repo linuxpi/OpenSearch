@@ -13,7 +13,6 @@ import org.opensearch.action.admin.cluster.remotestore.restore.RestoreRemoteStor
 import org.opensearch.action.index.IndexResponse;
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.cluster.health.ClusterHealthStatus;
-import org.opensearch.common.UUIDs;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.common.unit.ByteSizeUnit;
 import org.opensearch.common.unit.TimeValue;

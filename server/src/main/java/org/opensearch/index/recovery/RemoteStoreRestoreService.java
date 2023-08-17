@@ -167,7 +167,7 @@ public class RemoteStoreRestoreService {
                 if (metadataFromRemoteStore) {
                     // TODO integrate with download flow
                     // something like RemoteClusterStateService.getLatestIndexMetadata()
-                    // full integration PR used for testing - <add link>
+                    // full integration PR used for testing - https://github.com/soosinha/OpenSearch/pull/2/files
                 } else {
                     for (String indexName : request.indices()) {
                         IndexMetadata indexMetadata = currentState.metadata().index(indexName);
