@@ -57,6 +57,7 @@ import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.cluster.service.FakeThreadPoolClusterManagerService;
 import org.opensearch.common.Nullable;
 import org.opensearch.common.Randomness;
+import org.opensearch.common.SetOnce;
 import org.opensearch.common.UUIDs;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.io.stream.BytesStreamOutput;
@@ -123,6 +124,7 @@ import java.util.stream.Stream;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
+import static org.mockito.Mockito.mock;
 import static org.opensearch.cluster.coordination.AbstractCoordinatorTestCase.Cluster.DEFAULT_DELAY_VARIABILITY;
 import static org.opensearch.cluster.coordination.ClusterBootstrapService.BOOTSTRAP_PLACEHOLDER_PREFIX;
 import static org.opensearch.cluster.coordination.CoordinationStateTestCluster.clusterState;
@@ -1143,7 +1145,8 @@ public class AbstractCoordinatorTestCase extends OpenSearchTestCase {
                     Randomness.get(),
                     (s, p, r) -> {},
                     getElectionStrategy(),
-                    nodeHealthService
+                    nodeHealthService,
+                    new SetOnce<>(mock(CoordinationState.PersistedState.class))::get
                 );
                 clusterManagerService.setClusterStatePublisher(coordinator);
                 final GatewayService gatewayService = new GatewayService(

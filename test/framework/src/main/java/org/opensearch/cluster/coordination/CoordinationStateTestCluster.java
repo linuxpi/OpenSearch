@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
 import static com.carrotsearch.randomizedtesting.RandomizedTest.rarely;
 import static java.util.stream.Collectors.toSet;
 import static org.apache.lucene.tests.util.LuceneTestCase.random;
+import static org.mockito.Mockito.mock;
 import static org.opensearch.test.OpenSearchTestCase.randomBoolean;
 import static org.opensearch.test.OpenSearchTestCase.randomFrom;
 import static org.opensearch.test.OpenSearchTestCase.randomIntBetween;
@@ -144,7 +145,7 @@ public class CoordinationStateTestCluster {
                 )
             );
             this.electionStrategy = electionStrategy;
-            state = new CoordinationState(localNode, persistedState, electionStrategy);
+            state = new CoordinationState(localNode, persistedState, electionStrategy, mock(CoordinationState.PersistedState.class));
         }
 
         void reboot() {
@@ -183,7 +184,7 @@ public class CoordinationStateTestCluster {
                 localNode.getVersion()
             );
 
-            state = new CoordinationState(localNode, persistedState, electionStrategy);
+            state = new CoordinationState(localNode, persistedState, electionStrategy, mock(CoordinationState.PersistedState.class));
         }
 
         void setInitialState(CoordinationMetadata.VotingConfiguration initialConfig, long initialValue) {

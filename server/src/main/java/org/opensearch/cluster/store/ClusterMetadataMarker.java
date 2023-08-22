@@ -93,7 +93,13 @@ public class ClusterMetadataMarker implements Writeable, ToXContentFragment {
         return stateUUID;
     }
 
-    public ClusterMetadataMarker(Map<String, UploadedIndexMetadata> indices, long term, long version, String clusterUUID, String stateUUID) {
+    public ClusterMetadataMarker(
+        Map<String, UploadedIndexMetadata> indices,
+        long term,
+        long version,
+        String clusterUUID,
+        String stateUUID
+    ) {
         this.indices = Collections.unmodifiableMap(indices);
         this.term = term;
         this.version = version;
@@ -133,7 +139,10 @@ public class ClusterMetadataMarker implements Writeable, ToXContentFragment {
             return false;
         }
         final ClusterMetadataMarker that = (ClusterMetadataMarker) o;
-        return Objects.equals(indices, that.indices) && term == that.term && version == that.version && Objects.equals(clusterUUID, that.clusterUUID)
+        return Objects.equals(indices, that.indices)
+            && term == that.term
+            && version == that.version
+            && Objects.equals(clusterUUID, that.clusterUUID)
             && Objects.equals(stateUUID, that.stateUUID);
     }
 
@@ -163,7 +172,6 @@ public class ClusterMetadataMarker implements Writeable, ToXContentFragment {
         private long version;
         private String clusterUUID;
         private String stateUUID;
-
 
         public void term(long term) {
             this.term = term;
@@ -218,8 +226,10 @@ public class ClusterMetadataMarker implements Writeable, ToXContentFragment {
             return (String) fields[2];
         }
 
-        private static final ConstructingObjectParser<UploadedIndexMetadata, Void> PARSER = new ConstructingObjectParser<>("uploaded_index_metadata",
-            fields -> new UploadedIndexMetadata(indexName(fields), indexUUID(fields), uploadedFilename(fields)));
+        private static final ConstructingObjectParser<UploadedIndexMetadata, Void> PARSER = new ConstructingObjectParser<>(
+            "uploaded_index_metadata",
+            fields -> new UploadedIndexMetadata(indexName(fields), indexUUID(fields), uploadedFilename(fields))
+        );
 
         static {
             PARSER.declareString(ConstructingObjectParser.constructorArg(), INDEX_NAME_FIELD);
@@ -272,8 +282,9 @@ public class ClusterMetadataMarker implements Writeable, ToXContentFragment {
                 return false;
             }
             final UploadedIndexMetadata that = (UploadedIndexMetadata) o;
-            return Objects.equals(indexName, that.indexName) && Objects.equals(indexUUID, that.indexUUID) && Objects.equals(uploadedFilename,
-                that.uploadedFilename);
+            return Objects.equals(indexName, that.indexName)
+                && Objects.equals(indexUUID, that.indexUUID)
+                && Objects.equals(uploadedFilename, that.uploadedFilename);
         }
 
         @Override

@@ -130,8 +130,7 @@ public class DiscoveryModule {
         Path configFile,
         GatewayMetaState gatewayMetaState,
         RerouteService rerouteService,
-        NodeHealthService nodeHealthService,
-        RemoteClusterStateService remoteClusterStateService
+        NodeHealthService nodeHealthService
     ) {
         final Collection<BiConsumer<DiscoveryNode, ClusterState>> joinValidators = new ArrayList<>();
         final Map<String, Supplier<SeedHostsProvider>> hostProviders = new HashMap<>();

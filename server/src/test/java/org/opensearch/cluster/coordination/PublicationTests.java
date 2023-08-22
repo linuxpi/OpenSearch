@@ -76,6 +76,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.emptyIterable;
 import static org.hamcrest.Matchers.equalTo;
+import static org.mockito.Mockito.mock;
 
 public class PublicationTests extends OpenSearchTestCase {
 
@@ -94,7 +95,8 @@ public class PublicationTests extends OpenSearchTestCase {
             coordinationState = new CoordinationState(
                 localNode,
                 new InMemoryPersistedState(0L, initialState),
-                ElectionStrategy.DEFAULT_INSTANCE
+                ElectionStrategy.DEFAULT_INSTANCE,
+                mock(CoordinationState.PersistedState.class)
             );
         }
 

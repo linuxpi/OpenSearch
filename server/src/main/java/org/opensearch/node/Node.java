@@ -45,6 +45,7 @@ import org.opensearch.common.util.FeatureFlags;
 import org.opensearch.cluster.routing.allocation.AwarenessReplicaBalance;
 import org.opensearch.index.IndexModule;
 import org.opensearch.index.IndexingPressureService;
+import org.opensearch.index.recovery.RemoteStoreRestoreService;
 import org.opensearch.index.store.remote.filecache.FileCache;
 import org.opensearch.index.store.remote.filecache.FileCacheCleaner;
 import org.opensearch.index.store.remote.filecache.FileCacheFactory;
@@ -215,9 +216,9 @@ import org.opensearch.search.fetch.FetchPhase;
 import org.opensearch.search.query.QueryPhase;
 import org.opensearch.snapshots.InternalSnapshotsInfoService;
 import org.opensearch.snapshots.RestoreService;
+import org.opensearch.snapshots.SnapshotsService;
 import org.opensearch.snapshots.SnapshotShardsService;
 import org.opensearch.snapshots.SnapshotsInfoService;
-import org.opensearch.snapshots.SnapshotsService;
 import org.opensearch.tasks.Task;
 import org.opensearch.tasks.TaskCancellationService;
 import org.opensearch.tasks.TaskResultsService;
@@ -947,6 +948,20 @@ public class Node implements Closeable {
                 clusterInfoService::getClusterInfo
             );
 
+            final RemoteClusterStateService remoteClusterStateService = new RemoteClusterStateService(
+                repositoriesServiceReference::get,
+                settings
+            );
+
+            RemoteStoreRestoreService remoteStoreRestoreService = new RemoteStoreRestoreService(
+                clusterService,
+                clusterModule.getAllocationService(),
+                metadataCreateIndexService,
+                metadataIndexUpgradeService,
+                shardLimitValidator,
+                remoteClusterStateService
+            );
+
             final DiskThresholdMonitor diskThresholdMonitor = new DiskThresholdMonitor(
                 settings,
                 clusterService::state,
@@ -956,8 +971,6 @@ public class Node implements Closeable {
                 rerouteService
             );
             clusterInfoService.addListener(diskThresholdMonitor::onNewInfo);
-
-            final RemoteClusterStateService remoteClusterStateService = new RemoteClusterStateService(repositoriesServiceReference::get, settings);
 
             final DiscoveryModule discoveryModule = new DiscoveryModule(
                 settings,
@@ -973,8 +986,7 @@ public class Node implements Closeable {
                 environment.configDir(),
                 gatewayMetaState,
                 rerouteService,
-                fsHealthService,
-                remoteClusterStateService
+                fsHealthService
             );
             final SearchPipelineService searchPipelineService = new SearchPipelineService(
                 clusterService,
@@ -1146,6 +1158,7 @@ public class Node implements Closeable {
                 b.bind(SnapshotShardsService.class).toInstance(snapshotShardsService);
                 b.bind(TransportNodesSnapshotsStatus.class).toInstance(nodesSnapshotsStatus);
                 b.bind(RestoreService.class).toInstance(restoreService);
+                b.bind(RemoteStoreRestoreService.class).toInstance(remoteStoreRestoreService);
                 b.bind(RerouteService.class).toInstance(rerouteService);
                 b.bind(ShardLimitValidator.class).toInstance(shardLimitValidator);
                 b.bind(FsHealthService.class).toInstance(fsHealthService);

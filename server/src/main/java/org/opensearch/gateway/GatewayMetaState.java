@@ -62,7 +62,6 @@ import org.opensearch.common.util.concurrent.OpenSearchExecutors;
 import org.opensearch.common.util.concurrent.OpenSearchThreadPoolExecutor;
 import org.opensearch.common.util.io.IOUtils;
 import org.opensearch.env.NodeMetadata;
-import org.opensearch.indices.IndicesService;
 import org.opensearch.node.Node;
 import org.opensearch.plugins.MetadataUpgrader;
 import org.opensearch.threadpool.ThreadPool;
@@ -621,15 +620,19 @@ public class GatewayMetaState implements Closeable {
      */
     public static class RemotePersistedState implements PersistedState {
 
-        //todo check diff between currentTerm and clusterState term
+        // todo check diff between currentTerm and clusterState term
         private long currentTerm;
         private ClusterState lastAcceptedState;
         private ClusterMetadataMarker lastAcceptedMarker;
         private final RemoteClusterStateService remoteClusterStateService;
-        //todo Is this needed?
+        // todo Is this needed?
         private boolean writeNextStateFully;
 
-        public RemotePersistedState(final RemoteClusterStateService remoteClusterStateService, final long currentTerm, final ClusterState lastAcceptedState) {
+        public RemotePersistedState(
+            final RemoteClusterStateService remoteClusterStateService,
+            final long currentTerm,
+            final ClusterState lastAcceptedState
+        ) {
             this.remoteClusterStateService = remoteClusterStateService;
             this.currentTerm = currentTerm;
             this.lastAcceptedState = lastAcceptedState;
@@ -663,7 +666,12 @@ public class GatewayMetaState implements Closeable {
                 if (shouldWriteFullClusterState(clusterState)) {
                     marker = remoteClusterStateService.writeFullMetadata(currentTerm, clusterState);
                 } else {
-                    marker = remoteClusterStateService.writeIncrementalMetadata(currentTerm, lastAcceptedState, clusterState, lastAcceptedMarker);
+                    marker = remoteClusterStateService.writeIncrementalMetadata(
+                        currentTerm,
+                        lastAcceptedState,
+                        clusterState,
+                        lastAcceptedMarker
+                    );
                 }
                 lastAcceptedState = clusterState;
                 lastAcceptedMarker = marker;

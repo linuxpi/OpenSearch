@@ -59,6 +59,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.emptySet;
+import static org.mockito.Mockito.mock;
 import static org.opensearch.cluster.coordination.PreVoteCollector.REQUEST_PRE_VOTE_ACTION_NAME;
 import static org.opensearch.monitor.StatusInfo.Status.HEALTHY;
 import static org.opensearch.monitor.StatusInfo.Status.UNHEALTHY;
@@ -293,7 +294,8 @@ public class PreVoteCollectorTests extends OpenSearchTestCase {
         final CoordinationState coordinationState = new CoordinationState(
             localNode,
             new InMemoryPersistedState(currentTerm, makeClusterState(votingNodes)),
-            ElectionStrategy.DEFAULT_INSTANCE
+            ElectionStrategy.DEFAULT_INSTANCE,
+            mock(CoordinationState.PersistedState.class)
         );
 
         final long newTerm = randomLongBetween(currentTerm + 1, Long.MAX_VALUE);

@@ -76,7 +76,12 @@ public class CoordinationState {
     private VotingConfiguration lastPublishedConfiguration;
     private VoteCollection publishVotes;
 
-    public CoordinationState(DiscoveryNode localNode, PersistedState persistedState, ElectionStrategy electionStrategy, PersistedState remotePersistedState) {
+    public CoordinationState(
+        DiscoveryNode localNode,
+        PersistedState persistedState,
+        ElectionStrategy electionStrategy,
+        PersistedState remotePersistedState
+    ) {
         this.localNode = localNode;
 
         // persisted state

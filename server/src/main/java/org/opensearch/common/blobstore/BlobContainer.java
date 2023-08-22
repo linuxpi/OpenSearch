@@ -44,8 +44,6 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * An interface for managing a repository of blob entries, where each blob entry is just a named group of bytes.
@@ -238,11 +236,8 @@ public interface BlobContainer {
         }
     }
 
-    default List<BlobMetadata> listBlobsByPrefixInSortedOrder(
-        String blobNamePrefix,
-        int limit,
-        BlobNameSortOrder blobNameSortOrder
-    ) throws IOException {
+    default List<BlobMetadata> listBlobsByPrefixInSortedOrder(String blobNamePrefix, int limit, BlobNameSortOrder blobNameSortOrder)
+        throws IOException {
         if (limit < 0) {
             throw new IllegalArgumentException("limit should not be a negative value");
         }

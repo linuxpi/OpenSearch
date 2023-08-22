@@ -33,6 +33,7 @@ package org.opensearch.cluster.coordination;
 
 import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.Version;
+import org.opensearch.common.SetOnce;
 import org.opensearch.action.ActionListener;
 import org.opensearch.cluster.ClusterName;
 import org.opensearch.cluster.ClusterState;
@@ -93,6 +94,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.mockito.Mockito.mock;
 import static org.opensearch.monitor.StatusInfo.Status.HEALTHY;
 import static org.opensearch.transport.TransportService.HANDSHAKE_ACTION_NAME;
 import static org.hamcrest.Matchers.containsString;
@@ -260,7 +262,8 @@ public class NodeJoinTests extends OpenSearchTestCase {
             random,
             (s, p, r) -> {},
             ElectionStrategy.DEFAULT_INSTANCE,
-            nodeHealthService
+            nodeHealthService,
+            new SetOnce<>(mock(CoordinationState.PersistedState.class))::get
         );
         transportService.start();
         transportService.acceptIncomingRequests();

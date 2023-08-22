@@ -57,6 +57,7 @@ import static java.util.Collections.emptyMap;
 import static java.util.Collections.emptySet;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.mockito.Mockito.mock;
 
 public class CoordinationStateTests extends OpenSearchTestCase {
 
@@ -887,7 +888,9 @@ public class CoordinationStateTests extends OpenSearchTestCase {
     }
 
     public static CoordinationState createCoordinationState(PersistedState storage, DiscoveryNode localNode) {
-        return new CoordinationState(localNode, storage, ElectionStrategy.DEFAULT_INSTANCE);
+        return new CoordinationState(localNode, storage, ElectionStrategy.DEFAULT_INSTANCE,
+            mock(CoordinationState.PersistedState.class)
+            );
     }
 
     public static ClusterState clusterState(

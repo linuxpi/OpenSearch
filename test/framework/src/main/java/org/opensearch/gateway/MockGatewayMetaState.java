@@ -38,6 +38,8 @@ import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.metadata.MetadataIndexUpgradeService;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.service.ClusterService;
+import org.opensearch.cluster.store.RemoteClusterStateService;
+import org.opensearch.common.SetOnce;
 import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.settings.ClusterSettings;
 import org.opensearch.common.settings.Settings;
@@ -45,10 +47,12 @@ import org.opensearch.common.util.BigArrays;
 import org.opensearch.core.xcontent.NamedXContentRegistry;
 import org.opensearch.env.NodeEnvironment;
 import org.opensearch.plugins.MetadataUpgrader;
+import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.threadpool.ThreadPool;
 import org.opensearch.transport.TransportService;
 
 import java.io.IOException;
+import java.util.Set;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -97,6 +101,8 @@ public class MockGatewayMetaState extends GatewayMetaState {
         } catch (IOException e) {
             throw new AssertionError(e);
         }
+        SetOnce<RepositoriesService> repositoriesServiceSetOnce = new SetOnce<>();
+        repositoriesServiceSetOnce.set(mock(RepositoriesService.class));
         start(
             settings,
             transportService,
@@ -110,7 +116,8 @@ public class MockGatewayMetaState extends GatewayMetaState {
                 bigArrays,
                 new ClusterSettings(settings, ClusterSettings.BUILT_IN_CLUSTER_SETTINGS),
                 () -> 0L
-            )
+            ),
+            new RemoteClusterStateService(repositoriesServiceSetOnce::get, clusterService.getSettings())
         );
     }
 }

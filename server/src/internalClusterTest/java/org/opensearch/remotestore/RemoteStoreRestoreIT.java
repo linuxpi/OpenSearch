@@ -25,8 +25,10 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
+import static org.opensearch.indices.IndicesService.CLUSTER_REMOTE_STATE_REPOSITORY_SETTING;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertAcked;
 import static org.opensearch.test.hamcrest.OpenSearchAssertions.assertHitCount;
 
@@ -41,8 +43,21 @@ public class RemoteStoreRestoreIT extends RemoteStoreBaseIntegTestCase {
     private static final String MAX_SEQ_NO_REFRESHED_OR_FLUSHED = "max-seq-no-refreshed-or-flushed";
 
     @Override
+    protected Settings nodeSettings(int nodeOrdinal) {
+        return Settings.builder()
+            .put(super.nodeSettings(nodeOrdinal))
+            .put(remoteStoreClusterSettings(REPOSITORY_NAME))
+            .put(CLUSTER_REMOTE_STATE_REPOSITORY_SETTING.getKey(), REPOSITORY_NAME)
+            .build();
+    }
+
+    @Override
     public Settings indexSettings() {
         return remoteStoreIndexSettings(0);
+    }
+
+    public Settings indexSettings(int shards, int replicas) {
+        return remoteStoreIndexSettings(replicas, shards);
     }
 
     @Override
@@ -453,4 +468,46 @@ public class RemoteStoreRestoreIT extends RemoteStoreBaseIntegTestCase {
     }
 
     // TODO: Restore flow - index aliases
+
+    public void testRestoreFlowFullClusterRestartZeroReplica() {
+        int shardCount = 1;
+        // Step - 1 index some data to generate files in remote directory
+        prepareCluster(0, 1, INDEX_NAME, 0, shardCount);
+        Map<String, Long> indexStats = indexData(1, false, INDEX_NAME);
+        assertEquals(shardCount, getNumShards(INDEX_NAME).totalNumShards);
+        ensureGreen(INDEX_NAME);
+        String prevClusterUUID = clusterService().state().metadata().clusterUUID();
+
+        // Step - 2 Perform full cluster restart. This ensures new cluster state doesnt have previous index metadata
+        try {
+            internalCluster().stopRandomDataNode();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        try {
+            internalCluster().stopCurrentClusterManagerNode();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+
+        internalCluster().startNode();
+        putRepository(absolutePath);
+        putRepository(absolutePath2, REPOSITORY_2_NAME);
+
+        String newClusterUUID = clusterService().state().metadata().clusterUUID();
+        assert !Objects.equals(newClusterUUID, prevClusterUUID) : "cluster restart not successful. cluster uuid is same";
+
+        // Step - 3 Trigger full cluster restore
+        client().admin()
+            .cluster()
+            // Any sampleUUID would work as we are not integrated with remote cluster state repo in this test.
+            // We are mocking that interaction and supplying dummy index metadata
+            .restoreRemoteStore(new RestoreRemoteStoreRequest().clusterUUID(prevClusterUUID), PlainActionFuture.newFuture());
+
+        // Step - 4 validation restore is successful.
+        ensureGreen(INDEX_NAME);
+        assertEquals(getNumShards(INDEX_NAME).totalNumShards, getNumShards(INDEX_NAME).totalNumShards);
+        verifyRestoredData(indexStats, true, INDEX_NAME);
+    }
 }
