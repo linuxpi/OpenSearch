@@ -105,10 +105,9 @@ public class RemoteStoreRestoreService {
                     boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
                     IndexMetadata updatedIndexMetadata = indexMetadata;
                     Map<ShardId, ShardRouting> activeInitializingShards = new HashMap<>();
-                    if (restoreAllShards) {
+                    if (restoreAllShards || fromRemoteStore) {
                         updatedIndexMetadata = IndexMetadata.builder(indexMetadata)
                             .state(IndexMetadata.State.OPEN)
-                            // do we need to increment this during restore from remote index metadata
                             .version(1 + indexMetadata.getVersion())
                             .mappingVersion(1 + indexMetadata.getMappingVersion())
                             .settingsVersion(1 + indexMetadata.getSettingsVersion())
@@ -213,10 +212,6 @@ public class RemoteStoreRestoreService {
             String indexUuid = indexMetadata.getIndexUUID();
             boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
-                if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState()) == false) {
-                    throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
-                }
-
                 if (fromRemoteStore) {
                     boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
                     boolean sameUUIDIndexExists = currentState.metadata()
@@ -227,6 +222,14 @@ public class RemoteStoreRestoreService {
                     if (sameNameIndexExists || sameUUIDIndexExists) {
                         throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName));
                     }
+                    assert currentState.metadata()
+                        .indexGraveyard()
+                        .getTombstones()
+                        .stream()
+                        .anyMatch(
+                            tombstone -> tombstone.getIndex().getName().equals(indexName)
+                                || tombstone.getIndex().getUUID().equals(indexUuid)
+                        ) : "cannot restore index [%s] because index exists in the graveyard.";
                     Version minIndexCompatibilityVersion = currentState.getNodes().getMaxNodeVersion().minimumIndexCompatibilityVersion();
                     metadataIndexUpgradeService.upgradeIndexMetadata(indexMetadata, minIndexCompatibilityVersion);
                     boolean isHidden = IndexMetadata.INDEX_HIDDEN_SETTING.get(indexMetadata.getSettings());
@@ -234,6 +237,8 @@ public class RemoteStoreRestoreService {
                     createIndexService.validateDotIndex(indexName, isHidden);
                     createIndexService.validateIndexSettings(indexName, indexMetadata.getSettings(), false);
                     shardLimitValidator.validateShardLimit(indexName, indexMetadata.getSettings(), currentState);
+                } else if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState()) == false) {
+                    throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
                 }
             } else {
                 logger.warn("Remote store is not enabled for index: {}", indexName);

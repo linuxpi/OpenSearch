@@ -521,7 +521,7 @@ public class RemoteStoreRestoreIT extends RemoteStoreBaseIntegTestCase {
         ensureGreen(INDEX_NAME);
         String prevClusterUUID = clusterService().state().metadata().clusterUUID();
 
-        // Step - 2 Perform full cluster restart. This ensures new cluster state doesnt have previous index metadata
+        // Step - 2 Remove all nodes and add a new one. This ensures new cluster state doesnt have previous index metadata
         try {
             internalCluster().stopRandomDataNode();
         } catch (IOException e) {

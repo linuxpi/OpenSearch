@@ -64,9 +64,6 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
         if ((indices == null || indices.length == 0) && clusterUUID.isEmpty() == true) {
             validationException = addValidationError("indices are missing", validationException);
         }
-        if (restoreAllShards == true && clusterUUID.isEmpty() == false) {
-            validationException = addValidationError("restoreAllShards cannot be true when clusterUUID is set", validationException);
-        }
         return validationException;
     }
 
