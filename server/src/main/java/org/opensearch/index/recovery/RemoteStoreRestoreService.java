@@ -206,34 +206,39 @@ public class RemoteStoreRestoreService {
         boolean restoreAllShards,
         String restoreClusterUUID
     ) {
-        String errorMsg = "cannot restore index [%s] because an open index with same name already exists in the cluster.";
+        String errorMsg = "cannot restore index [%s] because an open index with same name/uuid already exists in the cluster.";
+
+        List<String> graveyardIndexNames = new ArrayList<>();
+        List<String> graveyardIndexUUID = new ArrayList<>();
+        currentState.metadata().indexGraveyard().getTombstones().forEach(tombstone -> {graveyardIndexNames.add(tombstone.getIndex().getName()); graveyardIndexUUID.add(tombstone.getIndex().getUUID());});
         for (Map.Entry<String, Tuple<Boolean, IndexMetadata>> indexMetadataEntry : indexMetadataMap.entrySet()) {
             String indexName = indexMetadataEntry.getKey();
             IndexMetadata indexMetadata = indexMetadataEntry.getValue().v2();
-            String indexUuid = indexMetadata.getIndexUUID();
+            String indexUUID = indexMetadata.getIndexUUID();
             boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
                 if (fromRemoteStore) {
+                    assert graveyardIndexNames.contains(indexName) == false : String.format(Locale.ROOT, "Index name [%s] exists in graveyard!", indexName);
+                    assert graveyardIndexUUID.contains(indexUUID) == false : String.format(Locale.ROOT, "Index UUID [%s] exists in graveyard!", indexUUID);
+
                     if (currentState.metadata().clusterUUID().equals(restoreClusterUUID)) {
+                        String finalErrorMsg = "clusterUUID to restore from should be different from current cluster UUID";
+                        logger.info(finalErrorMsg);
                         throw new IllegalArgumentException("clusterUUID to restore from should be different from current cluster UUID");
                     }
+
                     boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
                     boolean sameUUIDIndexExists = currentState.metadata()
                         .indices()
                         .values()
                         .stream()
-                        .anyMatch(indMd -> indMd.isSameUUID(indexUuid));
+                        .anyMatch(indMd -> indMd.isSameUUID(indexUUID));
                     if (sameNameIndexExists || sameUUIDIndexExists) {
-                        throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName));
+                        String finalErrorMsg = String.format(Locale.ROOT, errorMsg, indexName);
+                        logger.info(finalErrorMsg);
+                        throw new IllegalStateException(finalErrorMsg);
                     }
-                    assert currentState.metadata()
-                        .indexGraveyard()
-                        .getTombstones()
-                        .stream()
-                        .anyMatch(
-                            tombstone -> tombstone.getIndex().getName().equals(indexName)
-                                || tombstone.getIndex().getUUID().equals(indexUuid)
-                        ) : "cannot restore index [%s] because index exists in the graveyard.";
+
                     Version minIndexCompatibilityVersion = currentState.getNodes().getMaxNodeVersion().minimumIndexCompatibilityVersion();
                     metadataIndexUpgradeService.upgradeIndexMetadata(indexMetadata, minIndexCompatibilityVersion);
                     boolean isHidden = IndexMetadata.INDEX_HIDDEN_SETTING.get(indexMetadata.getSettings());
@@ -242,7 +247,9 @@ public class RemoteStoreRestoreService {
                     createIndexService.validateIndexSettings(indexName, indexMetadata.getSettings(), false);
                     shardLimitValidator.validateShardLimit(indexName, indexMetadata.getSettings(), currentState);
                 } else if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState()) == false) {
-                    throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
+                    String finalErrorMsg = String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.";
+                    logger.info(finalErrorMsg);
+                    throw new IllegalStateException(finalErrorMsg);
                 }
             } else {
                 logger.warn("Remote store is not enabled for index: {}", indexName);
