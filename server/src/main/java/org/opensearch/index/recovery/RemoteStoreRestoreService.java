@@ -210,7 +210,17 @@ public class RemoteStoreRestoreService {
 
         List<String> graveyardIndexNames = new ArrayList<>();
         List<String> graveyardIndexUUID = new ArrayList<>();
-        currentState.metadata().indexGraveyard().getTombstones().forEach(tombstone -> {graveyardIndexNames.add(tombstone.getIndex().getName()); graveyardIndexUUID.add(tombstone.getIndex().getUUID());});
+        List<String> liveClusterIndexUUIDs = currentState.metadata()
+            .indices()
+            .values()
+            .stream()
+            .map(IndexMetadata::getIndexUUID)
+            .collect(Collectors.toList());
+
+        currentState.metadata().indexGraveyard().getTombstones().forEach(tombstone -> {
+            graveyardIndexNames.add(tombstone.getIndex().getName());
+            graveyardIndexUUID.add(tombstone.getIndex().getUUID());
+        });
         for (Map.Entry<String, Tuple<Boolean, IndexMetadata>> indexMetadataEntry : indexMetadataMap.entrySet()) {
             String indexName = indexMetadataEntry.getKey();
             IndexMetadata indexMetadata = indexMetadataEntry.getValue().v2();
@@ -218,21 +228,30 @@ public class RemoteStoreRestoreService {
             boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
                 if (fromRemoteStore) {
-                    assert graveyardIndexNames.contains(indexName) == false : String.format(Locale.ROOT, "Index name [%s] exists in graveyard!", indexName);
-                    assert graveyardIndexUUID.contains(indexUUID) == false : String.format(Locale.ROOT, "Index UUID [%s] exists in graveyard!", indexUUID);
+                    // Since updates to graveyard are synced to remote we should neven land in a situation where remote contain index
+                    // metadata for graveyard index.
+                    assert graveyardIndexNames.contains(indexName) == false : String.format(
+                        Locale.ROOT,
+                        "Index name [%s] exists in graveyard!",
+                        indexName
+                    );
+                    assert graveyardIndexUUID.contains(indexUUID) == false : String.format(
+                        Locale.ROOT,
+                        "Index UUID [%s] exists in graveyard!",
+                        indexUUID
+                    );
 
+                    // Restore with current cluster UUID will fail as same indices would be present in the cluster which we are trying to
+                    // restore
                     if (currentState.metadata().clusterUUID().equals(restoreClusterUUID)) {
                         String finalErrorMsg = "clusterUUID to restore from should be different from current cluster UUID";
                         logger.info(finalErrorMsg);
                         throw new IllegalArgumentException("clusterUUID to restore from should be different from current cluster UUID");
                     }
 
+                    // Any indices being restored from remote cluster state should already be part of the cluster as this causes conflict
                     boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
-                    boolean sameUUIDIndexExists = currentState.metadata()
-                        .indices()
-                        .values()
-                        .stream()
-                        .anyMatch(indMd -> indMd.isSameUUID(indexUUID));
+                    boolean sameUUIDIndexExists = liveClusterIndexUUIDs.contains(indexUUID);
                     if (sameNameIndexExists || sameUUIDIndexExists) {
                         String finalErrorMsg = String.format(Locale.ROOT, errorMsg, indexName);
                         logger.info(finalErrorMsg);

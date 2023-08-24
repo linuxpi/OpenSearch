@@ -41,12 +41,12 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     private void stopAllNodes() {
         try {
             int totalDataNodes = internalCluster().numDataNodes();
-            while(totalDataNodes > 0) {
+            while (totalDataNodes > 0) {
                 internalCluster().stopRandomDataNode();
                 totalDataNodes -= 1;
             }
             int totalClusterManagerNodes = internalCluster().numClusterManagerNodes();
-            while(totalClusterManagerNodes > 1) {
+            while (totalClusterManagerNodes > 1) {
                 internalCluster().stopRandomNonClusterManagerNode();
                 totalClusterManagerNodes -= 1;
             }
@@ -79,7 +79,12 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         restoreAndValidate(clusterUUID, indexStats, true, PlainActionFuture.newFuture());
     }
 
-    private void restoreAndValidate(String clusterUUID, Map<String, Long> indexStats, boolean validate, ActionListener<RestoreRemoteStoreResponse> actionListener) {
+    private void restoreAndValidate(
+        String clusterUUID,
+        Map<String, Long> indexStats,
+        boolean validate,
+        ActionListener<RestoreRemoteStoreResponse> actionListener
+    ) {
         client().admin()
             .cluster()
             // Any sampleUUID would work as we are not integrated with remote cluster state repo in this test.
@@ -105,8 +110,9 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
             throw new RuntimeException(e);
         }
     }
+
     public void testFullClusterRestore() throws IOException {
-        int shardCount = randomIntBetween(1,2);
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
         int clusterManagerNodeCount = 1;
@@ -127,7 +133,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreMultipleIndices() {
-        int shardCount = randomIntBetween(1,2);
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount + 1;
         int clusterManagerNodeCount = 1;
@@ -157,7 +163,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreShardLimitReached() {
-        int shardCount = randomIntBetween(2,3);
+        int shardCount = randomIntBetween(2, 3);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
         int clusterManagerNodeCount = 1;
@@ -176,9 +182,14 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
         // Step 3 - Reduce shard limits to hit shard limit with less no of shards
         try {
-            client().admin().cluster().updateSettings(new ClusterUpdateSettingsRequest().transientSettings(
-                Settings.builder().put(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey(), 1).
-                    put(SETTING_MAX_SHARDS_PER_CLUSTER_KEY, 1))).get();
+            client().admin()
+                .cluster()
+                .updateSettings(
+                    new ClusterUpdateSettingsRequest().transientSettings(
+                        Settings.builder().put(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey(), 1).put(SETTING_MAX_SHARDS_PER_CLUSTER_KEY, 1)
+                    )
+                )
+                .get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
@@ -198,8 +209,9 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
         // Step - 5 Reset the cluster settings
         ClusterUpdateSettingsRequest resetRequest = new ClusterUpdateSettingsRequest();
-        resetRequest.transientSettings(Settings.builder().putNull(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey())
-            .putNull(SETTING_MAX_SHARDS_PER_CLUSTER_KEY));
+        resetRequest.transientSettings(
+            Settings.builder().putNull(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey()).putNull(SETTING_MAX_SHARDS_PER_CLUSTER_KEY)
+        );
 
         try {
             client().admin().cluster().updateSettings(resetRequest).get();
@@ -210,7 +222,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreNoStateInRestoreIllegalStateArgumentException() {
-        int shardCount = randomIntBetween(1,2);
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
         int clusterManagerNodeCount = 1;
@@ -225,7 +237,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testRestoreFlowFullClusterOnSameClusterUUID() {
-        int shardCount = randomIntBetween(1,2);
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
         int clusterManagerNodeCount = 1;
@@ -240,7 +252,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreSameNameIndexExists() {
-        int shardCount = randomIntBetween(1,2);
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
         int clusterManagerNodeCount = 1;
@@ -271,7 +283,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreMarkerFilePointsToInvalidIndexMetadataPathIllegalStateArgumentException() {
-        int shardCount = randomIntBetween(1,2);
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
         int clusterManagerNodeCount = 1;
@@ -289,7 +301,10 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
 
         // Step - 4 Delete index metadata file in remote
         try {
-            Files.move(absolutePath.resolve(clusterService().state().getClusterName().value() + "/cluster-state/" + prevClusterUUID + "/index"), absolutePath.resolve("cluster-state/"));
+            Files.move(
+                absolutePath.resolve(clusterService().state().getClusterName().value() + "/cluster-state/" + prevClusterUUID + "/index"),
+                absolutePath.resolve("cluster-state/")
+            );
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
