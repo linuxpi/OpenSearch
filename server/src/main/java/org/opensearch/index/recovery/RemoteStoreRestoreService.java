@@ -177,7 +177,7 @@ public class RemoteStoreRestoreService {
                         }
                     }
                 }
-                validate(currentState, indexMetadataMap, request.restoreAllShards());
+                validate(currentState, indexMetadataMap, request.restoreAllShards(), request.clusterUUID());
                 return executeRestore(currentState, indexMetadataMap, request.restoreAllShards());
             }
 
@@ -203,7 +203,8 @@ public class RemoteStoreRestoreService {
     private void validate(
         ClusterState currentState,
         Map<String, Tuple<Boolean, IndexMetadata>> indexMetadataMap,
-        boolean restoreAllShards
+        boolean restoreAllShards,
+        String restoreClusterUUID
     ) {
         String errorMsg = "cannot restore index [%s] because an open index with same name already exists in the cluster.";
         for (Map.Entry<String, Tuple<Boolean, IndexMetadata>> indexMetadataEntry : indexMetadataMap.entrySet()) {
@@ -213,6 +214,9 @@ public class RemoteStoreRestoreService {
             boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
                 if (fromRemoteStore) {
+                    if (currentState.metadata().clusterUUID().equals(restoreClusterUUID)) {
+                        throw new IllegalArgumentException("clusterUUID to restore from should be different from current cluster UUID");
+                    }
                     boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
                     boolean sameUUIDIndexExists = currentState.metadata()
                         .indices()
