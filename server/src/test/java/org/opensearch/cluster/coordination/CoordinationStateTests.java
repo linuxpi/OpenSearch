@@ -98,9 +98,19 @@ public class CoordinationStateTests extends OpenSearchTestCase {
 
         ps1 = new InMemoryPersistedState(0L, initialStateNode1);
 
-        cs1 = createCoordinationState(ps1, node1);
-        cs2 = createCoordinationState(new InMemoryPersistedState(0L, initialStateNode2), node2);
-        cs3 = createCoordinationState(new InMemoryPersistedState(0L, initialStateNode3), node3);
+        cs1 = createCoordinationState(ps1, node1, ps1, Settings.EMPTY);
+        cs2 = createCoordinationState(
+            new InMemoryPersistedState(0L, initialStateNode2),
+            node2,
+            new InMemoryPersistedState(0L, initialStateNode2),
+            Settings.EMPTY
+        );
+        cs3 = createCoordinationState(
+            new InMemoryPersistedState(0L, initialStateNode3),
+            node3,
+            new InMemoryPersistedState(0L, initialStateNode3),
+            Settings.EMPTY
+        );
     }
 
     public static DiscoveryNode createNode(String id) {
@@ -200,7 +210,7 @@ public class CoordinationStateTests extends OpenSearchTestCase {
     public void testJoinWithNoStartJoinAfterReboot() {
         StartJoinRequest startJoinRequest1 = new StartJoinRequest(node1, randomLongBetween(1, 5));
         Join v1 = cs1.handleStartJoin(startJoinRequest1);
-        cs1 = createCoordinationState(ps1, node1);
+        cs1 = createCoordinationState(ps1, node1, ps1, Settings.EMPTY);
         assertThat(
             expectThrows(CoordinationStateRejectedException.class, () -> cs1.handleJoin(v1)).getMessage(),
             containsString("ignored join as term has not been incremented yet after reboot")
@@ -886,8 +896,13 @@ public class CoordinationStateTests extends OpenSearchTestCase {
         ).runRandomly();
     }
 
-    public static CoordinationState createCoordinationState(PersistedState storage, DiscoveryNode localNode) {
-        return new CoordinationState(localNode, storage, ElectionStrategy.DEFAULT_INSTANCE);
+    public static CoordinationState createCoordinationState(
+        PersistedState storage,
+        DiscoveryNode localNode,
+        PersistedState remoteState,
+        Settings settings
+    ) {
+        return new CoordinationState(localNode, storage, ElectionStrategy.DEFAULT_INSTANCE, remoteState, settings);
     }
 
     public static ClusterState clusterState(

@@ -61,6 +61,8 @@ import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.InternalClusterInfoService;
 import org.opensearch.cluster.NodeConnectionsService;
 import org.opensearch.cluster.action.index.MappingUpdatedAction;
+import org.opensearch.cluster.coordination.PersistentStateRegistry;
+import org.opensearch.cluster.coordination.PersistentStateRegistry.PersistedStateType;
 import org.opensearch.cluster.metadata.AliasValidator;
 import org.opensearch.cluster.metadata.IndexTemplateMetadata;
 import org.opensearch.cluster.metadata.Metadata;
@@ -127,6 +129,7 @@ import org.opensearch.gateway.GatewayModule;
 import org.opensearch.gateway.GatewayService;
 import org.opensearch.gateway.MetaStateService;
 import org.opensearch.gateway.PersistedClusterStateService;
+import org.opensearch.gateway.remote.RemoteClusterStateService;
 import org.opensearch.http.HttpServerTransport;
 import org.opensearch.identity.IdentityService;
 import org.opensearch.index.IndexModule;
@@ -669,6 +672,12 @@ public class Node implements Closeable {
                 clusterService.getClusterSettings(),
                 threadPool::relativeTimeInMillis
             );
+            final RemoteClusterStateService remoteClusterStateService = new RemoteClusterStateService(
+                repositoriesServiceReference::get,
+                settings,
+                clusterService.getClusterSettings(),
+                threadPool::relativeTimeInMillis
+            );
 
             // collect engine factory providers from plugins
             final Collection<EnginePlugin> enginePlugins = pluginsService.filterPlugins(EnginePlugin.class);
@@ -1155,6 +1164,7 @@ public class Node implements Closeable {
                 b.bind(SystemIndices.class).toInstance(systemIndices);
                 b.bind(IdentityService.class).toInstance(identityService);
                 b.bind(Tracer.class).toInstance(tracer);
+                b.bind(RemoteClusterStateService.class).toInstance(remoteClusterStateService);
             });
             injector = modules.createInjector();
 
@@ -1302,7 +1312,8 @@ public class Node implements Closeable {
             injector.getInstance(MetaStateService.class),
             injector.getInstance(MetadataIndexUpgradeService.class),
             injector.getInstance(MetadataUpgrader.class),
-            injector.getInstance(PersistedClusterStateService.class)
+            injector.getInstance(PersistedClusterStateService.class),
+            injector.getInstance(RemoteClusterStateService.class)
         );
         if (Assertions.ENABLED) {
             try {
@@ -1321,7 +1332,9 @@ public class Node implements Closeable {
         }
         // we load the global state here (the persistent part of the cluster state stored on disk) to
         // pass it to the bootstrap checks to allow plugins to enforce certain preconditions based on the recovered state.
-        final Metadata onDiskMetadata = gatewayMetaState.getPersistedState().getLastAcceptedState().metadata();
+        final Metadata onDiskMetadata = PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL)
+            .getLastAcceptedState()
+            .metadata();
         assert onDiskMetadata != null : "metadata is null but shouldn't"; // this is never null
         validateNodeBeforeAcceptingRequests(
             new BootstrapContext(environment, onDiskMetadata),
