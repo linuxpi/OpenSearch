@@ -45,6 +45,8 @@ import org.opensearch.cluster.ClusterStateApplier;
 import org.opensearch.cluster.coordination.CoordinationMetadata;
 import org.opensearch.cluster.coordination.CoordinationState.PersistedState;
 import org.opensearch.cluster.coordination.InMemoryPersistedState;
+import org.opensearch.cluster.coordination.PersistentStateRegistry;
+import org.opensearch.cluster.coordination.PersistentStateRegistry.PersistedStateType;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.cluster.metadata.IndexTemplateMetadata;
 import org.opensearch.cluster.metadata.Manifest;
@@ -106,13 +108,13 @@ public class GatewayMetaState implements Closeable {
     private final SetOnce<PersistedState> persistedState = new SetOnce<>();
 
     public PersistedState getPersistedState() {
-        final PersistedState persistedState = this.persistedState.get();
+        final PersistedState persistedState = PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL);
         assert persistedState != null : "not started";
         return persistedState;
     }
 
     public Metadata getMetadata() {
-        return getPersistedState().getLastAcceptedState().metadata();
+        return PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL).getLastAcceptedState().metadata();
     }
 
     public void start(
@@ -122,9 +124,11 @@ public class GatewayMetaState implements Closeable {
         MetaStateService metaStateService,
         MetadataIndexUpgradeService metadataIndexUpgradeService,
         MetadataUpgrader metadataUpgrader,
-        PersistedClusterStateService persistedClusterStateService
+        PersistedClusterStateService persistedClusterStateService,
+        RemoteClusterStateService remoteClusterStateService
     ) {
-        assert persistedState.get() == null : "should only start once, but already have " + persistedState.get();
+        assert PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL) == null : "should only start once, but already have "
+            + persistedState.get();
 
         if (DiscoveryNode.isClusterManagerNode(settings) || DiscoveryNode.isDataNode(settings)) {
             try {
@@ -146,6 +150,7 @@ public class GatewayMetaState implements Closeable {
                 }
 
                 PersistedState persistedState = null;
+                PersistedState remotePersistedState = null;
                 boolean success = false;
                 try {
                     final ClusterState clusterState = prepareInitialClusterState(
@@ -159,6 +164,7 @@ public class GatewayMetaState implements Closeable {
 
                     if (DiscoveryNode.isClusterManagerNode(settings)) {
                         persistedState = new LucenePersistedState(persistedClusterStateService, currentTerm, clusterState);
+                        remotePersistedState = new RemotePersistedState(remoteClusterStateService);
                     } else {
                         persistedState = new AsyncLucenePersistedState(
                             settings,
@@ -183,7 +189,8 @@ public class GatewayMetaState implements Closeable {
                     }
                 }
 
-                this.persistedState.set(persistedState);
+                PersistentStateRegistry.addPersistedState(PersistedStateType.LOCAL, persistedState);
+                PersistentStateRegistry.addPersistedState(PersistedStateType.REMOTE, remotePersistedState);
             } catch (IOException e) {
                 throw new OpenSearchException("failed to load metadata", e);
             }
@@ -329,12 +336,12 @@ public class GatewayMetaState implements Closeable {
 
     @Override
     public void close() throws IOException {
-        IOUtils.close(persistedState.get());
+        IOUtils.close(PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL));
     }
 
     // visible for testing
     public boolean allPendingAsyncStatesWritten() {
-        final PersistedState ps = persistedState.get();
+        final PersistedState ps = PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL);
         if (ps instanceof AsyncLucenePersistedState) {
             return ((AsyncLucenePersistedState) ps).allPendingAsyncStatesWritten();
         } else {

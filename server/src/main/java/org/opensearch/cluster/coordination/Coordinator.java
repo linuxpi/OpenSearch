@@ -48,6 +48,7 @@ import org.opensearch.cluster.coordination.CoordinationMetadata.VotingConfigurat
 import org.opensearch.cluster.coordination.CoordinationState.VoteCollection;
 import org.opensearch.cluster.coordination.FollowersChecker.FollowerCheckRequest;
 import org.opensearch.cluster.coordination.JoinHelper.InitialJoinAccumulator;
+import org.opensearch.cluster.coordination.PersistentStateRegistry.PersistedStateType;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -821,7 +822,15 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
     protected void doStart() {
         synchronized (mutex) {
             CoordinationState.PersistedState persistedState = persistedStateSupplier.get();
-            coordinationState.set(new CoordinationState(getLocalNode(), persistedState, electionStrategy));
+            coordinationState.set(
+                new CoordinationState(
+                    getLocalNode(),
+                    persistedState,
+                    electionStrategy,
+                    PersistentStateRegistry.getPersistedState(PersistedStateType.REMOTE),
+                    settings
+                )
+            );
             peerFinder.setCurrentTerm(getCurrentTerm());
             configuredHostsResolver.start();
             final ClusterState lastAcceptedState = coordinationState.get().getLastAcceptedState();
@@ -1308,6 +1317,7 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
                 leaderChecker.setCurrentNodes(publishNodes);
                 followersChecker.setCurrentNodes(publishNodes);
                 lagDetector.setTrackedNodes(publishNodes);
+                coordinationState.get().handleRemotePublish(clusterState);
                 publication.start(followersChecker.getFaultyNodes());
             }
         } catch (Exception e) {
