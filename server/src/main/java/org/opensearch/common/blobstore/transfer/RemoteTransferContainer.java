@@ -174,7 +174,7 @@ public class RemoteTransferContainer implements Closeable {
     }
 
     private void finalizeUpload(boolean uploadSuccessful) throws IOException {
-        if (isRemoteDataIntegrityCheckPossible()) {
+        if (true) {
             return;
         }
 

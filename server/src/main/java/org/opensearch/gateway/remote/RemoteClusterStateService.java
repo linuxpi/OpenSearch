@@ -24,6 +24,7 @@ import org.opensearch.gateway.remote.ClusterMetadataMarker.UploadedIndexMetadata
 import org.opensearch.index.remote.RemoteStoreUtils;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.repositories.Repository;
+import org.opensearch.repositories.RepositoryMissingException;
 import org.opensearch.repositories.blobstore.BlobStoreRepository;
 import org.opensearch.repositories.blobstore.ChecksumBlobStoreFormat;
 
@@ -119,6 +120,9 @@ public class RemoteClusterStateService {
         }
         assert REMOTE_CLUSTER_STATE_ENABLED_SETTING.get(settings) == true : "Remote cluster state is not enabled";
         ensureRepositorySet();
+        if (blobStoreRepository == null) {
+            return null;
+        }
 
         final List<ClusterMetadataMarker.UploadedIndexMetadata> allUploadedIndexMetadata = new ArrayList<>();
         // todo parallel upload
@@ -271,7 +275,12 @@ public class RemoteClusterStateService {
         }
         final String remoteStoreRepo = REMOTE_CLUSTER_STATE_REPOSITORY_SETTING.get(settings);
         assert remoteStoreRepo != null : "Remote Cluster State repository is not configured";
-        final Repository repository = repositoriesService.get().repository(remoteStoreRepo);
+        final Repository repository;
+        try {
+            repository = repositoriesService.get().repository(remoteStoreRepo);
+        } catch (RepositoryMissingException e) {
+            return;
+        }
         assert repository instanceof BlobStoreRepository : "Repository should be instance of BlobStoreRepository";
         blobStoreRepository = (BlobStoreRepository) repository;
     }
@@ -300,7 +309,7 @@ public class RemoteClusterStateService {
     private String writeIndexMetadata(String clusterName, String clusterUUID, IndexMetadata uploadIndexMetadata, String fileName)
         throws IOException {
         final BlobContainer indexMetadataContainer = indexMetadataContainer(clusterName, clusterUUID, uploadIndexMetadata.getIndexUUID());
-        INDEX_METADATA_FORMAT.write(uploadIndexMetadata, indexMetadataContainer, fileName, blobStoreRepository.getCompressor());
+        INDEX_METADATA_FORMAT.writeAsync(uploadIndexMetadata, indexMetadataContainer, fileName, blobStoreRepository.getCompressor());
         // returning full path
         return indexMetadataContainer.path().buildAsString() + fileName;
     }

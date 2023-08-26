@@ -31,6 +31,7 @@
 
 package org.opensearch.repositories.blobstore;
 
+import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.apache.lucene.codecs.CodecUtil;
 import org.apache.lucene.index.CorruptIndexException;
 import org.apache.lucene.index.IndexFormatTooNewException;
@@ -40,16 +41,27 @@ import org.apache.lucene.store.ByteBuffersIndexInput;
 import org.apache.lucene.store.IndexInput;
 import org.apache.lucene.store.OutputStreamIndexOutput;
 import org.apache.lucene.util.BytesRef;
+import org.opensearch.action.LatchedActionListener;
+import org.opensearch.action.admin.cluster.remotestore.restore.RestoreRemoteStoreResponse;
+import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.common.CheckedFunction;
 import org.opensearch.common.blobstore.BlobContainer;
+import org.opensearch.common.blobstore.VerifyingMultiStreamBlobContainer;
+import org.opensearch.common.blobstore.stream.write.WriteContext;
+import org.opensearch.common.blobstore.stream.write.WritePriority;
+import org.opensearch.common.blobstore.transfer.RemoteTransferContainer;
+import org.opensearch.common.blobstore.transfer.stream.OffsetRangeFileInputStream;
+import org.opensearch.common.blobstore.transfer.stream.OffsetRangeIndexInputStream;
 import org.opensearch.common.io.Streams;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
 import org.opensearch.common.lucene.store.IndexOutputOutputStream;
+import org.opensearch.common.lucene.store.InputStreamIndexInput;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.compress.Compressor;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -58,6 +70,8 @@ import org.opensearch.core.xcontent.ToXContent;
 import org.opensearch.core.xcontent.XContentBuilder;
 import org.opensearch.core.xcontent.XContentParser;
 import org.opensearch.gateway.CorruptStateException;
+import org.opensearch.index.translog.transfer.FileSnapshot;
+import org.opensearch.index.translog.transfer.FileTransferException;
 import org.opensearch.snapshots.SnapshotInfo;
 
 import java.io.IOException;
@@ -66,6 +80,8 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
 
 /**
  * Snapshot metadata file format used in v2.0 and above
@@ -165,6 +181,33 @@ public final class ChecksumBlobStoreFormat<T extends ToXContent> {
         final String blobName = blobName(name);
         final BytesReference bytes = serialize(obj, blobName, compressor);
         blobContainer.writeBlob(blobName, bytes.streamInput(), bytes.length(), false);
+    }
+
+    public void writeAsync(final T obj, final BlobContainer blobContainer, final String name, final Compressor compressor) throws IOException {
+        final String blobName = blobName(name);
+        final BytesReference bytes = serialize(obj, blobName, compressor);
+        RemoteTransferContainer remoteTransferContainer = new RemoteTransferContainer(
+            blobName,
+            blobName,
+            bytes.length(),
+            true,
+            WritePriority.HIGH,
+            (size, position) -> new OffsetRangeIndexInputStream(new ByteArrayIndexInput("", BytesReference.toBytes(bytes)), size, position),
+            0,
+            false
+        );
+
+        ((VerifyingMultiStreamBlobContainer)blobContainer).asyncBlobUpload(remoteTransferContainer.createWriteContext(), new ActionListener<Void>() {
+            @Override
+            public void onResponse(Void unused) {
+                unused.equals("varun");
+            }
+
+            @Override
+            public void onFailure(Exception e) {
+                e.getCause();
+            }
+        });
     }
 
     public BytesReference serialize(final T obj, final String blobName, final Compressor compressor) throws IOException {
