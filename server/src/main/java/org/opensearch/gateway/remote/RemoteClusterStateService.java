@@ -22,8 +22,8 @@ import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Setting.Property;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
-import org.opensearch.core.action.ActionListener;
 import org.opensearch.common.util.io.IOUtils;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.gateway.remote.ClusterMetadataMarker.UploadedIndexMetadata;
 import org.opensearch.index.remote.RemoteStoreUtils;
 import org.opensearch.index.translog.transfer.FileTransferException;
@@ -207,7 +207,9 @@ public class RemoteClusterStateService implements Closeable {
 
         List<Exception> exceptionList = new ArrayList<>(clusterState.metadata().indices().size());
         final CountDownLatch latch = new CountDownLatch(clusterState.metadata().indices().size());
-        LatchedActionListener latchedActionListener = new LatchedActionListener<>(ActionListener.wrap((RemoteClusterStateService t) -> {}, ex -> {
+        LatchedActionListener latchedActionListener = new LatchedActionListener<>(ActionListener.wrap((RemoteClusterStateService t) -> {
+            logger.info("uploaded one metadata file");
+        }, ex -> {
             assert ex instanceof FileTransferException;
             logger.error(
                 () -> new ParameterizedMessage(
@@ -256,7 +258,7 @@ public class RemoteClusterStateService implements Closeable {
         }
 
         try {
-            if (latch.await(1000, TimeUnit.MILLISECONDS) == false) {
+            if (latch.await(20000, TimeUnit.MILLISECONDS) == false) {
                 Exception ex = new TimeoutException("Timed out waiting for transfer of index metadata to complete");
                 exceptionList.forEach(ex::addSuppressed);
                 throw ex;
@@ -297,7 +299,7 @@ public class RemoteClusterStateService implements Closeable {
         return marker;
     }
 
-    public void noOp () {}
+    public void noOp() {}
 
     @Nullable
     public ClusterMetadataMarker markLastStateAsCommitted(ClusterState clusterState, ClusterMetadataMarker previousMarker)

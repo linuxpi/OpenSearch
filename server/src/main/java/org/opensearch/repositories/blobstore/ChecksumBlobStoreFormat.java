@@ -196,20 +196,7 @@ public final class ChecksumBlobStoreFormat<T extends ToXContent> {
             false
         );
 
-        ((VerifyingMultiStreamBlobContainer) blobContainer).asyncBlobUpload(
-            remoteTransferContainer.createWriteContext(),
-            new ActionListener<Void>() {
-                @Override
-                public void onResponse(Void unused) {
-                    unused.equals("varun");
-                }
-
-                @Override
-                public void onFailure(Exception e) {
-                    e.getCause();
-                }
-            }
-        );
+        ((VerifyingMultiStreamBlobContainer) blobContainer).asyncBlobUpload(remoteTransferContainer.createWriteContext(), listener);
     }
 
     public BytesReference serialize(final T obj, final String blobName, final Compressor compressor) throws IOException {
