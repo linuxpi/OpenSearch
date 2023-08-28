@@ -10,7 +10,9 @@ package org.opensearch.gateway.remote;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.message.ParameterizedMessage;
 import org.opensearch.Version;
+import org.opensearch.action.LatchedActionListener;
 import org.opensearch.cluster.ClusterState;
 import org.opensearch.cluster.metadata.IndexMetadata;
 import org.opensearch.common.Nullable;
@@ -20,11 +22,14 @@ import org.opensearch.common.settings.Setting;
 import org.opensearch.common.settings.Setting.Property;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.common.unit.TimeValue;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.common.util.io.IOUtils;
 import org.opensearch.gateway.remote.ClusterMetadataMarker.UploadedIndexMetadata;
 import org.opensearch.index.remote.RemoteStoreUtils;
+import org.opensearch.index.translog.transfer.FileTransferException;
 import org.opensearch.repositories.RepositoriesService;
 import org.opensearch.repositories.Repository;
+import org.opensearch.repositories.RepositoryMissingException;
 import org.opensearch.repositories.blobstore.BlobStoreRepository;
 import org.opensearch.repositories.blobstore.ChecksumBlobStoreFormat;
 
@@ -36,6 +41,9 @@ import java.util.Base64;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -124,6 +132,9 @@ public class RemoteClusterStateService implements Closeable {
         }
         assert REMOTE_CLUSTER_STATE_ENABLED_SETTING.get(settings) == true : "Remote cluster state is not enabled";
         ensureRepositorySet();
+        if (blobStoreRepository == null) {
+            return null;
+        }
 
         final List<ClusterMetadataMarker.UploadedIndexMetadata> allUploadedIndexMetadata = new ArrayList<>();
         // todo parallel upload
@@ -175,7 +186,7 @@ public class RemoteClusterStateService implements Closeable {
         ClusterState previousClusterState,
         ClusterState clusterState,
         ClusterMetadataMarker previousMarker
-    ) throws IOException {
+    ) throws Exception {
         final long startTimeMillis = relativeTimeMillisSupplier.getAsLong();
         if (clusterState.nodes().isLocalNodeElectedClusterManager() == false) {
             logger.error("Local node is not elected cluster manager. Exiting");
@@ -193,6 +204,22 @@ public class RemoteClusterStateService implements Closeable {
         final Map<String, ClusterMetadataMarker.UploadedIndexMetadata> allUploadedIndexMetadata = previousMarker.getIndices()
             .stream()
             .collect(Collectors.toMap(UploadedIndexMetadata::getIndexName, Function.identity()));
+
+        List<Exception> exceptionList = new ArrayList<>(clusterState.metadata().indices().size());
+        final CountDownLatch latch = new CountDownLatch(clusterState.metadata().indices().size());
+        LatchedActionListener latchedActionListener = new LatchedActionListener<>(ActionListener.wrap((RemoteClusterStateService t) -> {}, ex -> {
+            assert ex instanceof FileTransferException;
+            logger.error(
+                () -> new ParameterizedMessage(
+                    "Exception during transfer for file {}",
+                    ((FileTransferException) ex).getFileSnapshot().getName()
+                ),
+                ex
+            );
+            FileTransferException e = (FileTransferException) ex;
+            exceptionList.add(ex);
+        }), latch);
+
         for (final IndexMetadata indexMetadata : clusterState.metadata().indices().values()) {
             final Long previousVersion = previousStateIndexMetadataVersionByName.get(indexMetadata.getIndex().getName());
             if (previousVersion == null || indexMetadata.getVersion() != previousVersion) {
@@ -203,12 +230,19 @@ public class RemoteClusterStateService implements Closeable {
                     indexMetadata.getVersion()
                 );
                 numIndicesUpdated++;
-                final String indexMetadataKey = writeIndexMetadata(
+                final BlobContainer indexMetadataContainer = indexMetadataContainer(
                     clusterState.getClusterName().value(),
-                    clusterState.getMetadata().clusterUUID(),
-                    indexMetadata,
-                    indexMetadataFileName(indexMetadata)
+                    clusterState.metadata().clusterUUID(),
+                    indexMetadata.getIndexUUID()
                 );
+                INDEX_METADATA_FORMAT.writeAsync(
+                    indexMetadata,
+                    indexMetadataContainer,
+                    indexMetadataFileName(indexMetadata),
+                    blobStoreRepository.getCompressor(),
+                    latchedActionListener
+                );
+                final String indexMetadataKey = indexMetadataContainer.path().buildAsString() + indexMetadataFileName(indexMetadata);
                 final UploadedIndexMetadata uploadedIndexMetadata = new UploadedIndexMetadata(
                     indexMetadata.getIndex().getName(),
                     indexMetadata.getIndexUUID(),
@@ -219,6 +253,18 @@ public class RemoteClusterStateService implements Closeable {
                 numIndicesUnchanged++;
             }
             previousStateIndexMetadataVersionByName.remove(indexMetadata.getIndex().getName());
+        }
+
+        try {
+            if (latch.await(1000, TimeUnit.MILLISECONDS) == false) {
+                Exception ex = new TimeoutException("Timed out waiting for transfer of index metadata to complete");
+                exceptionList.forEach(ex::addSuppressed);
+                throw ex;
+            }
+        } catch (InterruptedException ex) {
+            exceptionList.forEach(ex::addSuppressed);
+            Thread.currentThread().interrupt();
+            throw ex;
         }
 
         for (String removedIndexName : previousStateIndexMetadataVersionByName.keySet()) {
@@ -250,6 +296,8 @@ public class RemoteClusterStateService implements Closeable {
         }
         return marker;
     }
+
+    public void noOp () {}
 
     @Nullable
     public ClusterMetadataMarker markLastStateAsCommitted(ClusterState clusterState, ClusterMetadataMarker previousMarker)
@@ -283,7 +331,12 @@ public class RemoteClusterStateService implements Closeable {
         }
         final String remoteStoreRepo = REMOTE_CLUSTER_STATE_REPOSITORY_SETTING.get(settings);
         assert remoteStoreRepo != null : "Remote Cluster State repository is not configured";
-        final Repository repository = repositoriesService.get().repository(remoteStoreRepo);
+        final Repository repository;
+        try {
+            repository = repositoriesService.get().repository(remoteStoreRepo);
+        } catch (RepositoryMissingException e) {
+            return;
+        }
         assert repository instanceof BlobStoreRepository : "Repository should be instance of BlobStoreRepository";
         blobStoreRepository = (BlobStoreRepository) repository;
     }

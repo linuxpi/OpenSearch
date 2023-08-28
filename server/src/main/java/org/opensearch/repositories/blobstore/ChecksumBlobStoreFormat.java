@@ -43,6 +43,10 @@ import org.apache.lucene.util.BytesRef;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.common.CheckedFunction;
 import org.opensearch.common.blobstore.BlobContainer;
+import org.opensearch.common.blobstore.VerifyingMultiStreamBlobContainer;
+import org.opensearch.common.blobstore.stream.write.WritePriority;
+import org.opensearch.common.blobstore.transfer.RemoteTransferContainer;
+import org.opensearch.common.blobstore.transfer.stream.OffsetRangeIndexInputStream;
 import org.opensearch.common.io.Streams;
 import org.opensearch.common.io.stream.BytesStreamOutput;
 import org.opensearch.common.lucene.store.ByteArrayIndexInput;
@@ -50,6 +54,7 @@ import org.opensearch.common.lucene.store.IndexOutputOutputStream;
 import org.opensearch.common.xcontent.LoggingDeprecationHandler;
 import org.opensearch.common.xcontent.XContentHelper;
 import org.opensearch.common.xcontent.XContentType;
+import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.common.bytes.BytesReference;
 import org.opensearch.core.compress.Compressor;
 import org.opensearch.core.xcontent.MediaTypeRegistry;
@@ -165,6 +170,46 @@ public final class ChecksumBlobStoreFormat<T extends ToXContent> {
         final String blobName = blobName(name);
         final BytesReference bytes = serialize(obj, blobName, compressor);
         blobContainer.writeBlob(blobName, bytes.streamInput(), bytes.length(), false);
+    }
+
+    public void writeAsync(
+        final T obj,
+        final BlobContainer blobContainer,
+        final String name,
+        final Compressor compressor,
+        ActionListener<Void> listener
+    ) throws IOException {
+        if (blobContainer instanceof VerifyingMultiStreamBlobContainer == false) {
+            write(obj, blobContainer, name, compressor);
+            return;
+        }
+        final String blobName = blobName(name);
+        final BytesReference bytes = serialize(obj, blobName, compressor);
+        RemoteTransferContainer remoteTransferContainer = new RemoteTransferContainer(
+            blobName,
+            blobName,
+            bytes.length(),
+            true,
+            WritePriority.HIGH,
+            (size, position) -> new OffsetRangeIndexInputStream(new ByteArrayIndexInput("", BytesReference.toBytes(bytes)), size, position),
+            0,
+            false
+        );
+
+        ((VerifyingMultiStreamBlobContainer) blobContainer).asyncBlobUpload(
+            remoteTransferContainer.createWriteContext(),
+            new ActionListener<Void>() {
+                @Override
+                public void onResponse(Void unused) {
+                    unused.equals("varun");
+                }
+
+                @Override
+                public void onFailure(Exception e) {
+                    e.getCause();
+                }
+            }
+        );
     }
 
     public BytesReference serialize(final T obj, final String blobName, final Compressor compressor) throws IOException {

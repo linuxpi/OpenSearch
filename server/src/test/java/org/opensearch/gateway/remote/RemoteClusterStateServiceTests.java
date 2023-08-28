@@ -133,7 +133,7 @@ public class RemoteClusterStateServiceTests extends OpenSearchTestCase {
         assertThat(marker.getStateUUID(), is(expectedMarker.getStateUUID()));
     }
 
-    public void testFailWriteIncrementalMetadataNonClusterManagerNode() throws IOException {
+    public void testFailWriteIncrementalMetadataNonClusterManagerNode() throws Exception {
         final ClusterState clusterState = generateClusterStateWithOneIndex().build();
         final ClusterMetadataMarker marker = remoteClusterStateService.writeIncrementalMetadata(clusterState, clusterState, null);
         Assert.assertThat(marker, nullValue());
@@ -151,7 +151,7 @@ public class RemoteClusterStateServiceTests extends OpenSearchTestCase {
         );
     }
 
-    public void testWriteIncrementalMetadataSuccess() throws IOException {
+    public void testWriteIncrementalMetadataSuccess() throws Exception {
         final ClusterState clusterState = generateClusterStateWithOneIndex().nodes(nodesWithLocalNodeClusterManager()).build();
         mockBlobStoreObjects();
         final CoordinationMetadata coordinationMetadata = CoordinationMetadata.builder().term(1L).build();
