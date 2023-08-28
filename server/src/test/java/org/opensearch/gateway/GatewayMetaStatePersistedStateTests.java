@@ -429,6 +429,7 @@ public class GatewayMetaStatePersistedStateTests extends OpenSearchTestCase {
                 () -> 0L
             );
             final RemoteClusterStateService remoteClusterStateService = new RemoteClusterStateService(
+                nodeEnvironment.nodeId(),
                 () -> new RepositoriesService(
                     settings,
                     clusterService,

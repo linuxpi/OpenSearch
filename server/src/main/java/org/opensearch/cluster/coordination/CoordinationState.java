@@ -503,7 +503,7 @@ public class CoordinationState {
                 publishResponse.getVersion(),
                 publishResponse.getTerm()
             );
-            handleRemoteCommit();
+            handlePreCommit();
             return Optional.of(new ApplyCommitRequest(localNode, publishResponse.getTerm(), publishResponse.getVersion()));
         }
 
@@ -565,14 +565,16 @@ public class CoordinationState {
         assert getLastCommittedConfiguration().equals(getLastAcceptedConfiguration());
     }
 
-    public void handleRemotePublish(ClusterState clusterState) {
+    public void handlePrePublish(ClusterState clusterState) {
+        // Publishing the current state to remote store
         if (isRemoteStateEnabled == true) {
             assert remotePersistedState != null : "Remote state has not been initialized";
             remotePersistedState.setLastAcceptedState(clusterState);
         }
     }
 
-    public void handleRemoteCommit() {
+    public void handlePreCommit() {
+        // Publishing the committed state to remote store before sending apply commit to other nodes.
         if (isRemoteStateEnabled) {
             assert remotePersistedState != null : "Remote state has not been initialized";
             remotePersistedState.markLastAcceptedStateAsCommitted();

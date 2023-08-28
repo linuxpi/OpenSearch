@@ -61,8 +61,8 @@ import org.opensearch.cluster.ClusterStateObserver;
 import org.opensearch.cluster.InternalClusterInfoService;
 import org.opensearch.cluster.NodeConnectionsService;
 import org.opensearch.cluster.action.index.MappingUpdatedAction;
-import org.opensearch.cluster.coordination.PersistentStateRegistry;
-import org.opensearch.cluster.coordination.PersistentStateRegistry.PersistedStateType;
+import org.opensearch.cluster.coordination.PersistedStateRegistry;
+import org.opensearch.cluster.coordination.PersistedStateRegistry.PersistedStateType;
 import org.opensearch.cluster.metadata.AliasValidator;
 import org.opensearch.cluster.metadata.IndexTemplateMetadata;
 import org.opensearch.cluster.metadata.Metadata;
@@ -673,6 +673,7 @@ public class Node implements Closeable {
                 threadPool::relativeTimeInMillis
             );
             final RemoteClusterStateService remoteClusterStateService = new RemoteClusterStateService(
+                nodeEnvironment.nodeId(),
                 repositoriesServiceReference::get,
                 settings,
                 clusterService.getClusterSettings(),
@@ -1332,7 +1333,7 @@ public class Node implements Closeable {
         }
         // we load the global state here (the persistent part of the cluster state stored on disk) to
         // pass it to the bootstrap checks to allow plugins to enforce certain preconditions based on the recovered state.
-        final Metadata onDiskMetadata = PersistentStateRegistry.getPersistedState(PersistedStateType.LOCAL)
+        final Metadata onDiskMetadata = PersistedStateRegistry.getPersistedState(PersistedStateType.LOCAL)
             .getLastAcceptedState()
             .metadata();
         assert onDiskMetadata != null : "metadata is null but shouldn't"; // this is never null

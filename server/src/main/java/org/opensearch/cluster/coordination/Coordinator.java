@@ -48,7 +48,7 @@ import org.opensearch.cluster.coordination.CoordinationMetadata.VotingConfigurat
 import org.opensearch.cluster.coordination.CoordinationState.VoteCollection;
 import org.opensearch.cluster.coordination.FollowersChecker.FollowerCheckRequest;
 import org.opensearch.cluster.coordination.JoinHelper.InitialJoinAccumulator;
-import org.opensearch.cluster.coordination.PersistentStateRegistry.PersistedStateType;
+import org.opensearch.cluster.coordination.PersistedStateRegistry.PersistedStateType;
 import org.opensearch.cluster.metadata.Metadata;
 import org.opensearch.cluster.node.DiscoveryNode;
 import org.opensearch.cluster.node.DiscoveryNodes;
@@ -827,7 +827,7 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
                     getLocalNode(),
                     persistedState,
                     electionStrategy,
-                    PersistentStateRegistry.getPersistedState(PersistedStateType.REMOTE),
+                    PersistedStateRegistry.getPersistedState(PersistedStateType.REMOTE),
                     settings
                 )
             );
@@ -1317,7 +1317,11 @@ public class Coordinator extends AbstractLifecycleComponent implements Discovery
                 leaderChecker.setCurrentNodes(publishNodes);
                 followersChecker.setCurrentNodes(publishNodes);
                 lagDetector.setTrackedNodes(publishNodes);
-                coordinationState.get().handleRemotePublish(clusterState);
+                // Publishing the current state to remote store before sending the cluster state to other nodes.
+                // This is to ensure the remote store is the single source of truth for current state. Even if the current node
+                // goes down after sending the cluster state to other nodes, we should be able to read the remote state and
+                // recover the cluster.
+                coordinationState.get().handlePrePublish(clusterState);
                 publication.start(followersChecker.getFaultyNodes());
             }
         } catch (Exception e) {
