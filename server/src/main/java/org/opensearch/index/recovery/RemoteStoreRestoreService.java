@@ -22,7 +22,6 @@ import org.opensearch.cluster.metadata.MetadataIndexUpgradeService;
 import org.opensearch.cluster.routing.IndexShardRoutingTable;
 import org.opensearch.cluster.routing.RecoverySource;
 import org.opensearch.cluster.routing.RoutingTable;
-import org.opensearch.cluster.routing.ShardRouting;
 import org.opensearch.cluster.routing.allocation.AllocationService;
 import org.opensearch.cluster.service.ClusterService;
 import org.opensearch.common.UUIDs;
@@ -104,7 +103,6 @@ public class RemoteStoreRestoreService {
                     IndexMetadata indexMetadata = indexMetadataEntry.getValue().v2();
                     boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
                     IndexMetadata updatedIndexMetadata = indexMetadata;
-                    Map<ShardId, ShardRouting> activeInitializingShards = new HashMap<>();
                     if (restoreAllShards || fromRemoteStore) {
                         updatedIndexMetadata = IndexMetadata.builder(indexMetadata)
                             .state(IndexMetadata.State.OPEN)
@@ -113,15 +111,6 @@ public class RemoteStoreRestoreService {
                             .settingsVersion(1 + indexMetadata.getSettingsVersion())
                             .aliasesVersion(1 + indexMetadata.getAliasesVersion())
                             .build();
-                    } else if (fromRemoteStore == false) {
-                        activeInitializingShards = currentState.routingTable()
-                            .index(indexName)
-                            .shards()
-                            .values()
-                            .stream()
-                            .map(IndexShardRoutingTable::primaryShard)
-                            .filter(shardRouting -> shardRouting.unassigned() == false)
-                            .collect(Collectors.toMap(ShardRouting::shardId, Function.identity()));
                     }
 
                     IndexId indexId = new IndexId(indexName, updatedIndexMetadata.getIndexUUID());

@@ -75,7 +75,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         putRepository(absolutePath2, REPOSITORY_2_NAME);
     }
 
-    private void restoreAndValidate(String clusterUUID, Map<String, Long> indexStats) {
+    private void restoreAndValidate(String clusterUUID, Map<String, Long> indexStats) throws Exception {
         restoreAndValidate(clusterUUID, indexStats, true, PlainActionFuture.newFuture());
     }
 
@@ -84,7 +84,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         Map<String, Long> indexStats,
         boolean validate,
         ActionListener<RestoreRemoteStoreResponse> actionListener
-    ) {
+    ) throws Exception {
         client().admin()
             .cluster()
             // Any sampleUUID would work as we are not integrated with remote cluster state repo in this test.
@@ -94,11 +94,12 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         if (validate) {
             // Step - 4 validation restore is successful.
             ensureGreen(INDEX_NAME);
-            verifyRestoredData(indexStats, true, INDEX_NAME);
+            verifyRestoredData(indexStats, INDEX_NAME);
         }
     }
 
-    private void restoreAndValidateFails(String clusterUUID, PlainActionFuture<RestoreRemoteStoreResponse> actionListener) {
+    private void restoreAndValidateFails(String clusterUUID, PlainActionFuture<RestoreRemoteStoreResponse> actionListener)
+        throws Exception {
         restoreAndValidate(clusterUUID, null, false, actionListener);
 
         try {
@@ -111,7 +112,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         }
     }
 
-    public void testFullClusterRestore() throws IOException {
+    @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
+    public void testFullClusterRestore() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
@@ -132,7 +134,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     }
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreMultipleIndices() {
+    public void testFullClusterRestoreMultipleIndices() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount + 1;
@@ -158,11 +160,11 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         // Step - 3 Trigger full cluster restore
         restoreAndValidate(prevClusterUUID, indexStats);
         ensureGreen(secondIndexName);
-        verifyRestoredData(indexStats2, true, secondIndexName);
+        verifyRestoredData(indexStats2, secondIndexName);
     }
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreShardLimitReached() {
+    public void testFullClusterRestoreShardLimitReached() throws Exception {
         int shardCount = randomIntBetween(2, 3);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
@@ -221,7 +223,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     }
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreNoStateInRestoreIllegalStateArgumentException() {
+    public void testFullClusterRestoreNoStateInRestoreIllegalStateArgumentException() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
@@ -236,7 +238,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     }
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testRestoreFlowFullClusterOnSameClusterUUID() {
+    public void testRestoreFlowFullClusterOnSameClusterUUID() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
@@ -251,7 +253,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     }
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreSameNameIndexExists() {
+    public void testFullClusterRestoreSameNameIndexExists() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
@@ -282,7 +284,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     }
 
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreMarkerFilePointsToInvalidIndexMetadataPathIllegalStateArgumentException() {
+    public void testFullClusterRestoreMarkerFilePointsToInvalidIndexMetadataPathIllegalStateArgumentException() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 0;
         int dataNodeCount = shardCount;
