@@ -22,6 +22,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
 
+import static org.opensearch.gateway.remote.RemoteClusterStateService.REMOTE_CLUSTER_STATE_ENABLED_SETTING;
+import static org.opensearch.gateway.remote.RemoteClusterStateService.REMOTE_CLUSTER_STATE_REPOSITORY_SETTING;
 import static org.opensearch.indices.ShardLimitValidator.SETTING_CLUSTER_MAX_SHARDS_PER_NODE;
 import static org.opensearch.indices.ShardLimitValidator.SETTING_MAX_SHARDS_PER_CLUSTER_KEY;
 
@@ -33,27 +35,9 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         return Settings.builder()
             .put(super.nodeSettings(nodeOrdinal))
             .put(remoteStoreClusterSettings(REPOSITORY_NAME))
-            // TODO uncomment after rebased with upload changes
-            // .put(CLUSTER_REMOTE_STATE_REPOSITORY_SETTING.getKey(), REPOSITORY_NAME)
+            .put(REMOTE_CLUSTER_STATE_ENABLED_SETTING.getKey(), true)
+            .put(REMOTE_CLUSTER_STATE_REPOSITORY_SETTING.getKey(), REPOSITORY_NAME)
             .build();
-    }
-
-    private void stopAllNodes() {
-        try {
-            int totalDataNodes = internalCluster().numDataNodes();
-            while (totalDataNodes > 0) {
-                internalCluster().stopRandomDataNode();
-                totalDataNodes -= 1;
-            }
-            int totalClusterManagerNodes = internalCluster().numClusterManagerNodes();
-            while (totalClusterManagerNodes > 1) {
-                internalCluster().stopRandomNonClusterManagerNode();
-                totalClusterManagerNodes -= 1;
-            }
-            internalCluster().stopCurrentClusterManagerNode();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
     }
 
     private void addNewNodes(int dataNodeCount, int clusterManagerNodeCount) {
@@ -69,7 +53,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     }
 
     private void resetCluster(int dataNodeCount, int clusterManagerNodeCount) {
-        stopAllNodes();
+        internalCluster().stopAllNodes();
         addNewNodes(dataNodeCount, clusterManagerNodeCount);
         putRepository(absolutePath);
         putRepository(absolutePath2, REPOSITORY_2_NAME);

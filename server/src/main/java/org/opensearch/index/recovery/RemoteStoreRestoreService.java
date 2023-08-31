@@ -214,9 +214,17 @@ public class RemoteStoreRestoreService {
             String indexName = indexMetadataEntry.getKey();
             IndexMetadata indexMetadata = indexMetadataEntry.getValue().v2();
             String indexUUID = indexMetadata.getIndexUUID();
-            boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
+            boolean metadataFromRemoteStore = indexMetadataEntry.getValue().v1();
             if (indexMetadata.getSettings().getAsBoolean(SETTING_REMOTE_STORE_ENABLED, false)) {
-                if (fromRemoteStore) {
+                if (metadataFromRemoteStore) {
+                    // Restore with current cluster UUID will fail as same indices would be present in the cluster which we are trying to
+                    // restore
+                    if (currentState.metadata().clusterUUID().equals(restoreClusterUUID)) {
+                        String finalErrorMsg = "clusterUUID to restore from should be different from current cluster UUID";
+                        logger.info(finalErrorMsg);
+                        throw new IllegalArgumentException("clusterUUID to restore from should be different from current cluster UUID");
+                    }
+
                     // Since updates to graveyard are synced to remote we should neven land in a situation where remote contain index
                     // metadata for graveyard index.
                     assert graveyardIndexNames.contains(indexName) == false : String.format(
@@ -229,14 +237,6 @@ public class RemoteStoreRestoreService {
                         "Index UUID [%s] exists in graveyard!",
                         indexUUID
                     );
-
-                    // Restore with current cluster UUID will fail as same indices would be present in the cluster which we are trying to
-                    // restore
-                    if (currentState.metadata().clusterUUID().equals(restoreClusterUUID)) {
-                        String finalErrorMsg = "clusterUUID to restore from should be different from current cluster UUID";
-                        logger.info(finalErrorMsg);
-                        throw new IllegalArgumentException("clusterUUID to restore from should be different from current cluster UUID");
-                    }
 
                     // Any indices being restored from remote cluster state should already be part of the cluster as this causes conflict
                     boolean sameNameIndexExists = currentState.metadata().hasIndex(indexName);
@@ -255,9 +255,7 @@ public class RemoteStoreRestoreService {
                     createIndexService.validateIndexSettings(indexName, indexMetadata.getSettings(), false);
                     shardLimitValidator.validateShardLimit(indexName, indexMetadata.getSettings(), currentState);
                 } else if (restoreAllShards && IndexMetadata.State.CLOSE.equals(indexMetadata.getState()) == false) {
-                    String finalErrorMsg = String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.";
-                    logger.info(finalErrorMsg);
-                    throw new IllegalStateException(finalErrorMsg);
+                    throw new IllegalStateException(String.format(Locale.ROOT, errorMsg, indexName) + " Close the existing index.");
                 }
             } else {
                 logger.warn("Remote store is not enabled for index: {}", indexName);
