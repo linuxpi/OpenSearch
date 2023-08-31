@@ -948,9 +948,13 @@ public class Node implements Closeable {
                 indicesService,
                 clusterInfoService::getClusterInfo
             );
+
             RemoteStoreRestoreService remoteStoreRestoreService = new RemoteStoreRestoreService(
                 clusterService,
-                clusterModule.getAllocationService()
+                clusterModule.getAllocationService(),
+                metadataCreateIndexService,
+                metadataIndexUpgradeService,
+                shardLimitValidator
             );
 
             final DiskThresholdMonitor diskThresholdMonitor = new DiskThresholdMonitor(
