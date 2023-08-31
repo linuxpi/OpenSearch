@@ -47,7 +47,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     private Map<String, Long> initialTestSetup(int shardCount, int replicaCount, int dataNodeCount, int clusterManagerNodeCount) {
         prepareCluster(clusterManagerNodeCount, dataNodeCount, INDEX_NAME, replicaCount, shardCount);
         Map<String, Long> indexStats = indexData(1, false, INDEX_NAME);
-        assertEquals(shardCount, getNumShards(INDEX_NAME).totalNumShards);
+        assertEquals(shardCount * (replicaCount + 1), getNumShards(INDEX_NAME).totalNumShards);
         ensureGreen(INDEX_NAME);
         return indexStats;
     }
@@ -69,11 +69,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         boolean validate,
         ActionListener<RestoreRemoteStoreResponse> actionListener
     ) throws Exception {
-        client().admin()
-            .cluster()
-            // Any sampleUUID would work as we are not integrated with remote cluster state repo in this test.
-            // We are mocking that interaction and supplying dummy index metadata
-            .restoreRemoteStore(new RestoreRemoteStoreRequest().clusterUUID(clusterUUID), actionListener);
+        client().admin().cluster().restoreRemoteStore(new RestoreRemoteStoreRequest().clusterUUID(clusterUUID), actionListener);
 
         if (validate) {
             // Step - 4 validation restore is successful.
@@ -90,7 +86,12 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
             RestoreRemoteStoreResponse response = actionListener.get();
         } catch (ExecutionException e) {
             // If the request goes to co-ordinator, e.getCause() can be RemoteTransportException
-            assertTrue(e.getCause() instanceof IllegalStateException || e.getCause().getCause() instanceof IllegalStateException);
+            assertTrue(
+                e.getCause() instanceof IllegalStateException
+                    || e.getCause().getCause() instanceof IllegalStateException
+                    || e.getCause() instanceof IllegalArgumentException
+                    || e.getCause().getCause() instanceof IllegalArgumentException
+            );
         } catch (InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -99,8 +100,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestore() throws Exception {
         int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory
@@ -120,8 +121,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreMultipleIndices() throws Exception {
         int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount + 1;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory
@@ -130,7 +131,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         String secondIndexName = INDEX_NAME + "-2";
         createIndex(secondIndexName, remoteStoreIndexSettings(replicaCount, shardCount + 1));
         Map<String, Long> indexStats2 = indexData(1, false, secondIndexName);
-        assertEquals(shardCount + 1, getNumShards(secondIndexName).totalNumShards);
+        assertEquals((shardCount + 1) * (replicaCount + 1), getNumShards(secondIndexName).totalNumShards);
         ensureGreen(secondIndexName);
 
         String prevClusterUUID = clusterService().state().metadata().clusterUUID();
@@ -150,8 +151,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreShardLimitReached() throws Exception {
         int shardCount = randomIntBetween(2, 3);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory
@@ -209,8 +210,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreNoStateInRestoreIllegalStateArgumentException() throws Exception {
         int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory
@@ -224,8 +225,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testRestoreFlowFullClusterOnSameClusterUUID() throws Exception {
         int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory
@@ -239,8 +240,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreSameNameIndexExists() throws Exception {
         int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory
@@ -270,8 +271,8 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
     @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreMarkerFilePointsToInvalidIndexMetadataPathIllegalStateArgumentException() throws Exception {
         int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 0;
-        int dataNodeCount = shardCount;
+        int replicaCount = 1;
+        int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
         // Step - 1 index some data to generate files in remote directory

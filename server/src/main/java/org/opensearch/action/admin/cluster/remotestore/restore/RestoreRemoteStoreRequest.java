@@ -63,7 +63,7 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
         ActionRequestValidationException validationException = null;
         if ((indices == null || indices.length == 0) && clusterUUID.isEmpty() == true) {
             validationException = addValidationError("indices are missing", validationException);
-        } else if ((indices != null || indices.length > 0) && clusterUUID.isEmpty() == false) {
+        } else if ((indices != null && indices.length > 0) && clusterUUID.isEmpty() == false) {
             validationException = addValidationError("cannot selectively restore indices during full cluster restore", validationException);
         }
         return validationException;
