@@ -387,9 +387,10 @@ public class RemoteClusterStateService implements Closeable {
     private IndexMetadata getIndexMetadata(String clusterName, String clusterUUID, UploadedIndexMetadata uploadedIndexMetadata)
         throws IOException {
         try {
+            String[] splitPath = uploadedIndexMetadata.getUploadedFilename().split("/");
             return INDEX_METADATA_FORMAT.read(
                 indexMetadataContainer(clusterName, clusterUUID, uploadedIndexMetadata.getIndexUUID()),
-                uploadedIndexMetadata.getUploadedFilename(),
+                splitPath[splitPath.length - 1],
                 blobStoreRepository.getNamedXContentRegistry()
             );
         } catch (IOException e) {

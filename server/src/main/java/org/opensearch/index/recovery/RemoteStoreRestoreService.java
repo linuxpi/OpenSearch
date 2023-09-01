@@ -29,11 +29,13 @@ import org.opensearch.common.collect.Tuple;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.core.action.ActionListener;
 import org.opensearch.core.index.shard.ShardId;
+import org.opensearch.gateway.remote.RemoteClusterStateService;
 import org.opensearch.indices.ShardLimitValidator;
 import org.opensearch.repositories.IndexId;
 import org.opensearch.snapshots.RestoreInfo;
 import org.opensearch.snapshots.RestoreService;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -62,18 +64,22 @@ public class RemoteStoreRestoreService {
 
     private final ShardLimitValidator shardLimitValidator;
 
+    private final RemoteClusterStateService remoteClusterStateService;
+
     public RemoteStoreRestoreService(
         ClusterService clusterService,
         AllocationService allocationService,
         MetadataCreateIndexService createIndexService,
         MetadataIndexUpgradeService metadataIndexUpgradeService,
-        ShardLimitValidator shardLimitValidator
+        ShardLimitValidator shardLimitValidator,
+        RemoteClusterStateService remoteClusterStateService
     ) {
         this.clusterService = clusterService;
         this.allocationService = allocationService;
         this.createIndexService = createIndexService;
         this.metadataIndexUpgradeService = metadataIndexUpgradeService;
         this.shardLimitValidator = shardLimitValidator;
+        this.remoteClusterStateService = remoteClusterStateService;
     }
 
     /**
@@ -113,8 +119,6 @@ public class RemoteStoreRestoreService {
                             .build();
                     }
 
-                    IndexId indexId = new IndexId(indexName, updatedIndexMetadata.getIndexUUID());
-
                     Map<ShardId, IndexShardRoutingTable> indexShardRoutingTableMap = new HashMap<>();
                     if (metadataFromRemoteStore == false) {
                         indexShardRoutingTableMap = currentState.routingTable()
@@ -125,6 +129,7 @@ public class RemoteStoreRestoreService {
                             .collect(Collectors.toMap(IndexShardRoutingTable::shardId, Function.identity()));
                     }
 
+                    IndexId indexId = new IndexId(indexName, updatedIndexMetadata.getIndexUUID());
                     RecoverySource.RemoteStoreRecoverySource recoverySource = new RecoverySource.RemoteStoreRecoverySource(
                         restoreUUID,
                         updatedIndexMetadata.getCreationVersion(),
@@ -134,7 +139,7 @@ public class RemoteStoreRestoreService {
                         updatedIndexMetadata,
                         recoverySource,
                         indexShardRoutingTableMap,
-                        request.restoreAllShards()
+                        request.restoreAllShards() || metadataFromRemoteStore
                     );
                     blocks.updateBlocks(updatedIndexMetadata);
                     mdBuilder.put(updatedIndexMetadata, true);
@@ -156,9 +161,15 @@ public class RemoteStoreRestoreService {
                     || request.clusterUUID().isEmpty()
                     || request.clusterUUID().isBlank()) == false;
                 if (metadataFromRemoteStore) {
-                    // TODO integrate with download flow
-                    // something like RemoteClusterStateService.getLatestIndexMetadata()
-                    // full integration PR used for testing - https://github.com/soosinha/OpenSearch/pull/2/files
+                    try {
+                        remoteClusterStateService.getLatestIndexMetadata(currentState.getClusterName().value(), request.clusterUUID())
+                            .values()
+                            .forEach(indexMetadata -> {
+                                indexMetadataMap.put(indexMetadata.getIndex().getName(), new Tuple<>(true, indexMetadata));
+                            });
+                    } catch (IOException e) {
+                        throw new IllegalStateException("Unable to restore remote index metadata", e);
+                    }
                 } else {
                     for (String indexName : request.indices()) {
                         IndexMetadata indexMetadata = currentState.metadata().index(indexName);
