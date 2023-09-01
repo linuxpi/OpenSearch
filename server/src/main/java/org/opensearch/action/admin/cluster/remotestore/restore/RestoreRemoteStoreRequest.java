@@ -63,7 +63,7 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
         ActionRequestValidationException validationException = null;
         if ((indices == null || indices.length == 0) && clusterUUID.isEmpty() == true) {
             validationException = addValidationError("indices are missing", validationException);
-        } else if ((indices != null || indices.length > 0) && clusterUUID.isEmpty() == false) {
+        } else if ((indices != null && indices.length > 0) && clusterUUID.isEmpty() == false) {
             validationException = addValidationError("cannot selectively restore indices during full cluster restore", validationException);
         }
         return validationException;
@@ -148,7 +148,9 @@ public class RestoreRemoteStoreRequest extends ClusterManagerNodeRequest<Restore
     }
 
     /**
-     * Set the value for clusterUUID, denoting whether to fetch cluster state from remote store
+     * Set the value for clusterUUID, denoting which clusterUUID to fetch cluster state from the remote store.
+     * It is optional field and in case not specified,
+     * only indices which are present in cluster state can be restored from remote store.
      *
      * @param clusterUUID uuid of the cluster used to generate the remote path
      * @return this request
