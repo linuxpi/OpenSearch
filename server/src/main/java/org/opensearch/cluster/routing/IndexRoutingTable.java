@@ -471,16 +471,15 @@ public class IndexRoutingTable extends AbstractDiffable<IndexRoutingTable> imple
                 }
                 IndexShardRoutingTable.Builder indexShardRoutingBuilder = new IndexShardRoutingTable.Builder(shardId);
                 IndexShardRoutingTable indexShardRoutingTable = indexShardRoutingTableMap.get(shardId);
-                if (restoreAllShards || indexShardRoutingTable.primaryShard().unassigned()) {
+                if (restoreAllShards || indexShardRoutingTable == null || indexShardRoutingTable.primaryShard().unassigned()) {
                     // Primary shard to be recovered from remote store.
                     indexShardRoutingBuilder.addShard(ShardRouting.newUnassigned(shardId, true, recoverySource, unassignedInfo));
                     // All the replica shards to be recovered from peer recovery.
-                    indexShardRoutingTable.replicaShards()
-                        .forEach(
-                            shardRouting -> indexShardRoutingBuilder.addShard(
-                                ShardRouting.newUnassigned(shardId, false, PeerRecoverySource.INSTANCE, unassignedInfo)
-                            )
+                    for (int replicaNumber = 0; replicaNumber < indexMetadata.getNumberOfReplicas(); replicaNumber++) {
+                        indexShardRoutingBuilder.addShard(
+                            ShardRouting.newUnassigned(shardId, false, PeerRecoverySource.INSTANCE, unassignedInfo)
                         );
+                    }
                 } else {
                     // Primary is either active or initializing. Do not trigger restore.
                     indexShardRoutingBuilder.addShard(indexShardRoutingTable.primaryShard());

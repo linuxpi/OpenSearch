@@ -101,9 +101,9 @@ public class RemoteStoreRestoreService {
                 for (Map.Entry<String, Tuple<Boolean, IndexMetadata>> indexMetadataEntry : indexMetadataMap.entrySet()) {
                     String indexName = indexMetadataEntry.getKey();
                     IndexMetadata indexMetadata = indexMetadataEntry.getValue().v2();
-                    boolean fromRemoteStore = indexMetadataEntry.getValue().v1();
+                    boolean metadataFromRemoteStore = indexMetadataEntry.getValue().v1();
                     IndexMetadata updatedIndexMetadata = indexMetadata;
-                    if (restoreAllShards || fromRemoteStore) {
+                    if (restoreAllShards || metadataFromRemoteStore) {
                         updatedIndexMetadata = IndexMetadata.builder(indexMetadata)
                             .state(IndexMetadata.State.OPEN)
                             .version(1 + indexMetadata.getVersion())
@@ -115,12 +115,15 @@ public class RemoteStoreRestoreService {
 
                     IndexId indexId = new IndexId(indexName, updatedIndexMetadata.getIndexUUID());
 
-                    Map<ShardId, IndexShardRoutingTable> indexShardRoutingTableMap = currentState.routingTable()
-                        .index(indexName)
-                        .shards()
-                        .values()
-                        .stream()
-                        .collect(Collectors.toMap(IndexShardRoutingTable::shardId, Function.identity()));
+                    Map<ShardId, IndexShardRoutingTable> indexShardRoutingTableMap = new HashMap<>();
+                    if (metadataFromRemoteStore == false) {
+                        indexShardRoutingTableMap = currentState.routingTable()
+                            .index(indexName)
+                            .shards()
+                            .values()
+                            .stream()
+                            .collect(Collectors.toMap(IndexShardRoutingTable::shardId, Function.identity()));
+                    }
 
                     RecoverySource.RemoteStoreRecoverySource recoverySource = new RecoverySource.RemoteStoreRecoverySource(
                         restoreUUID,
