@@ -38,6 +38,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
@@ -371,17 +372,19 @@ public class RemoteClusterStateService implements Closeable {
      * @param clusterName name of the cluster
      * @return {@code Map<String, IndexMetadata>} latest IndexUUID to IndexMetadata map
      */
-    public Map<String, IndexMetadata> getLatestIndexMetadata(String clusterUUID, String clusterName) throws IOException {
+    public Map<String, IndexMetadata> getLatestIndexMetadata(String clusterName, String clusterUUID) throws IOException {
         Map<String, IndexMetadata> remoteIndexMetadata = new HashMap<>();
-        ClusterMetadataManifest ClusterMetadataManifest = getLatestClusterMetadataManifest(clusterUUID, clusterName);
-        for (UploadedIndexMetadata uploadedIndexMetadata : ClusterMetadataManifest.getIndices()) {
-            IndexMetadata indexMetadata = getIndexMetadata(clusterUUID, clusterName, uploadedIndexMetadata);
+        ClusterMetadataManifest clusterMetadataManifest = getLatestClusterMetadataManifest(clusterName, clusterUUID);
+        assert Objects.equals(clusterUUID, clusterMetadataManifest.getClusterUUID())
+            : "Corrupt ClusterMetadataManifest found. Cluster UUID mismatch.";
+        for (UploadedIndexMetadata uploadedIndexMetadata : clusterMetadataManifest.getIndices()) {
+            IndexMetadata indexMetadata = getIndexMetadata(clusterName, clusterUUID, uploadedIndexMetadata);
             remoteIndexMetadata.put(uploadedIndexMetadata.getIndexUUID(), indexMetadata);
         }
         return remoteIndexMetadata;
     }
 
-    private IndexMetadata getIndexMetadata(String clusterUUID, String clusterName, UploadedIndexMetadata uploadedIndexMetadata)
+    private IndexMetadata getIndexMetadata(String clusterName, String clusterUUID, UploadedIndexMetadata uploadedIndexMetadata)
         throws IOException {
         try {
             return INDEX_METADATA_FORMAT.read(
@@ -396,7 +399,7 @@ public class RemoteClusterStateService implements Closeable {
                 uploadedIndexMetadata.getUploadedFilename()
             );
             logger.error(errorMsg, e);
-            throw new IllegalStateException(errorMsg);
+            throw new IllegalStateException(errorMsg, e);
         }
     }
 
@@ -406,9 +409,9 @@ public class RemoteClusterStateService implements Closeable {
      * @param clusterName name of the cluster
      * @return ClusterMetadataManifest
      */
-    public ClusterMetadataManifest getLatestClusterMetadataManifest(String clusterUUID, String clusterName) {
-        String latestMarkerFileName = getLatestManifestFileName(clusterUUID, clusterName);
-        return fetchRemoteClusterMetadataManifest(latestMarkerFileName, clusterUUID, clusterName);
+    public ClusterMetadataManifest getLatestClusterMetadataManifest(String clusterName, String clusterUUID) {
+        String latestManifestFileName = getLatestManifestFileName(clusterName, clusterUUID);
+        return fetchRemoteClusterMetadataManifest(clusterName, clusterUUID, latestManifestFileName);
     }
 
     /**
@@ -417,20 +420,25 @@ public class RemoteClusterStateService implements Closeable {
      * @param clusterName name of the cluster
      * @return latest ClusterMetadataManifest filename
      */
-    private String getLatestManifestFileName(String clusterUUID, String clusterName) throws IllegalStateException {
+    private String getLatestManifestFileName(String clusterName, String clusterUUID) throws IllegalStateException {
         try {
-            List<BlobMetadata> markerFilesMetadata = manifestContainer(clusterUUID, clusterName).listBlobsByPrefixInSortedOrder(
+            /**
+             * {@link BlobContainer#listBlobsByPrefixInSortedOrder} will get the latest manifest file
+             * as the manifest file name generated via {@link RemoteClusterStateService#getManifestFileName} ensures
+             * when sorted in LEXICOGRAPHIC order the latest uploaded manifest file comes on top.
+             */
+            List<BlobMetadata> manifestFilesMetadata = manifestContainer(clusterName, clusterUUID).listBlobsByPrefixInSortedOrder(
                 "manifest" + DELIMITER,
                 1,
                 BlobContainer.BlobNameSortOrder.LEXICOGRAPHIC
             );
-            if (markerFilesMetadata != null && !markerFilesMetadata.isEmpty()) {
-                return markerFilesMetadata.get(0).name();
+            if (manifestFilesMetadata != null && !manifestFilesMetadata.isEmpty()) {
+                return manifestFilesMetadata.get(0).name();
             }
         } catch (IOException e) {
             String errorMsg = "Error while fetching latest manifest file for remote cluster state";
             logger.error(errorMsg, e);
-            throw new IllegalStateException(errorMsg);
+            throw new IllegalStateException(errorMsg, e);
         }
 
         throw new IllegalStateException(String.format(Locale.ROOT, "Remote Cluster State not found - %s", clusterUUID));
@@ -442,18 +450,18 @@ public class RemoteClusterStateService implements Closeable {
      * @param clusterName name of the cluster
      * @return ClusterMetadataManifest
      */
-    private ClusterMetadataManifest fetchRemoteClusterMetadataManifest(String filename, String clusterUUID, String clusterName)
+    private ClusterMetadataManifest fetchRemoteClusterMetadataManifest(String clusterName, String clusterUUID, String filename)
         throws IllegalStateException {
         try {
             return RemoteClusterStateService.CLUSTER_METADATA_MANIFEST_FORMAT.read(
-                manifestContainer(clusterUUID, clusterName),
+                manifestContainer(clusterName, clusterUUID),
                 filename,
                 blobStoreRepository.getNamedXContentRegistry()
             );
         } catch (IOException e) {
             String errorMsg = String.format(Locale.ROOT, "Error while downloading cluster metadata - %s", filename);
             logger.error(errorMsg, e);
-            throw new IllegalStateException(errorMsg);
+            throw new IllegalStateException(errorMsg, e);
         }
     }
 
