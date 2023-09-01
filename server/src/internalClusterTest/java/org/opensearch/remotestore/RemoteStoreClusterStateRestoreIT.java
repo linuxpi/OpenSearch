@@ -18,9 +18,7 @@ import org.opensearch.gateway.remote.RemoteClusterStateService;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.util.Base64;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ExecutionException;
@@ -100,7 +98,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         }
     }
 
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
+    @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestore() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 1;
@@ -121,7 +119,7 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         restoreAndValidate(prevClusterUUID, indexStats);
     }
 
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
+    @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreMultipleIndices() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 1;
@@ -151,127 +149,65 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         verifyRestoredData(indexStats2, secondIndexName);
     }
 
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreShardLimitReached() throws Exception {
-        int shardCount = randomIntBetween(2, 3);
+    @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
+    public void testFullClusterRestoreFailureValidationFailures() throws Exception {
+        int shardCount = randomIntBetween(1, 2);
         int replicaCount = 1;
         int dataNodeCount = shardCount * (replicaCount + 1);
         int clusterManagerNodeCount = 1;
 
-        // Step - 1 index some data to generate files in remote directory
+        // index some data to generate files in remote directory
         Map<String, Long> indexStats = initialTestSetup(shardCount, replicaCount, dataNodeCount, clusterManagerNodeCount);
-
         String prevClusterUUID = clusterService().state().metadata().clusterUUID();
 
+        // Start of Test - 1
+        // Test - 1 Trigger full cluster restore and validate it fails due to incorrect cluster UUID
+        PlainActionFuture<RestoreRemoteStoreResponse> future = PlainActionFuture.newFuture();
+        restoreAndValidateFails("randomUUID", future);
+        // End of Test - 1
+
+        // Start of Test - 3
+        // Test - 2 Trigger full cluster restore and validate it fails due to cluster UUID same as current cluster UUID
+        restoreAndValidateFails(clusterService().state().metadata().clusterUUID(), future);
+        // End of Test - 2
+
+        // Start of Test - 3
         // Step - 2 Replace all nodes in the cluster with new nodes. This ensures new cluster state doesn't have previous index metadata
         // Restarting cluster with just 1 data node helps with applying cluster settings
         resetCluster(1, clusterManagerNodeCount);
-
         String newClusterUUID = clusterService().state().metadata().clusterUUID();
         assert !Objects.equals(newClusterUUID, prevClusterUUID) : "cluster restart not successful. cluster uuid is same";
 
-        // Step 3 - Reduce shard limits to hit shard limit with less no of shards
-        try {
-            client().admin()
-                .cluster()
-                .updateSettings(
-                    new ClusterUpdateSettingsRequest().transientSettings(
-                        Settings.builder().put(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey(), 1).put(SETTING_MAX_SHARDS_PER_CLUSTER_KEY, 1)
-                    )
-                )
-                .get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
+        reduceShardLimits(1, 1);
 
         // Step - 4 Trigger full cluster restore and validate it fails
-        PlainActionFuture<RestoreRemoteStoreResponse> future = PlainActionFuture.newFuture();
-        restoreAndValidate(prevClusterUUID, indexStats, false, future);
+        future = PlainActionFuture.newFuture();
+        restoreAndValidateFails(prevClusterUUID, future);
+        resetShardLimits();
+        // End of Test - 3
 
-        try {
-            RestoreRemoteStoreResponse response = future.get();
-        } catch (ExecutionException e) {
-            // If the request goes to co-ordinator, e.getCause() can be RemoteTransportException
-            assertTrue(e.getCause() instanceof IllegalArgumentException || e.getCause().getCause() instanceof IllegalArgumentException);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
+        // Start of Test - 4
+        // Test -4 Reset cluster and trigger full restore with same name index in the cluster
+        // Test -4 Add required nodes for this test after last reset.
+        addNewNodes(dataNodeCount - 1, 0);
 
-        // Step - 5 Reset the cluster settings
-        ClusterUpdateSettingsRequest resetRequest = new ClusterUpdateSettingsRequest();
-        resetRequest.transientSettings(
-            Settings.builder().putNull(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey()).putNull(SETTING_MAX_SHARDS_PER_CLUSTER_KEY)
-        );
-
-        try {
-            client().admin().cluster().updateSettings(resetRequest).get();
-        } catch (InterruptedException | ExecutionException e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreNoStateInRestoreIllegalStateArgumentException() throws Exception {
-        int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 1;
-        int dataNodeCount = shardCount * (replicaCount + 1);
-        int clusterManagerNodeCount = 1;
-
-        // Step - 1 index some data to generate files in remote directory
-        initialTestSetup(shardCount, replicaCount, dataNodeCount, clusterManagerNodeCount);
-
-        // Step - 2 Trigger full cluster restore and validate it fails
-        PlainActionFuture<RestoreRemoteStoreResponse> future = PlainActionFuture.newFuture();
-        restoreAndValidateFails("randomUUID", future);
-    }
-
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testRestoreFlowFullClusterOnSameClusterUUID() throws Exception {
-        int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 1;
-        int dataNodeCount = shardCount * (replicaCount + 1);
-        int clusterManagerNodeCount = 1;
-
-        // Step - 1 index some data to generate files in remote directory
-        initialTestSetup(shardCount, replicaCount, dataNodeCount, clusterManagerNodeCount);
-
-        // Step - 2 Trigger full cluster restore and validate it fails
-        PlainActionFuture<RestoreRemoteStoreResponse> future = PlainActionFuture.newFuture();
-        restoreAndValidateFails(clusterService().state().metadata().clusterUUID(), future);
-    }
-
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
-    public void testFullClusterRestoreSameNameIndexExists() throws Exception {
-        int shardCount = randomIntBetween(1, 2);
-        int replicaCount = 1;
-        int dataNodeCount = shardCount * (replicaCount + 1);
-        int clusterManagerNodeCount = 1;
-
-        // Step - 1 index some data to generate files in remote directory
-        initialTestSetup(shardCount, replicaCount, dataNodeCount, clusterManagerNodeCount);
-
-        String prevClusterUUID = clusterService().state().metadata().clusterUUID();
-
-        // Step - 2 Replace all nodes in the cluster with new nodes. This ensures new cluster state doesn't have previous index metadata
-        resetCluster(dataNodeCount, clusterManagerNodeCount);
-
-        String newClusterUUID = clusterService().state().metadata().clusterUUID();
+        newClusterUUID = clusterService().state().metadata().clusterUUID();
         assert !Objects.equals(newClusterUUID, prevClusterUUID) : "cluster restart not successful. cluster uuid is same";
 
-        // Step - 3 Create a new index with same name
+        // Test -4 Step - 2 Create a new index with same name
         createIndex(INDEX_NAME, remoteStoreIndexSettings(0, 1));
         ensureYellowAndNoInitializingShards(INDEX_NAME);
         ensureGreen(INDEX_NAME);
 
-        // Step - 4 Trigger full cluster restore and validate fails
-        PlainActionFuture<RestoreRemoteStoreResponse> future = PlainActionFuture.newFuture();
+        // Test -4 Step - 3 Trigger full cluster restore and validate fails
         restoreAndValidateFails(prevClusterUUID, future);
 
-        // Step - 4 validation restore is successful.
+        // Test -4 Step - 4 validation restore is successful.
         ensureGreen(INDEX_NAME);
+        // End of Test - 4
     }
 
-    // @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
+    @AwaitsFix(bugUrl = "waiting upload flow rebase. tested on integration PR")
     public void testFullClusterRestoreMarkerFilePointsToInvalidIndexMetadataPathIllegalStateArgumentException() throws Exception {
         int shardCount = randomIntBetween(1, 2);
         int replicaCount = 1;
@@ -308,4 +244,37 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         PlainActionFuture<RestoreRemoteStoreResponse> future = PlainActionFuture.newFuture();
         restoreAndValidateFails(prevClusterUUID, future);
     }
+
+    private void reduceShardLimits(int maxShardsPerNode, int maxShardsPerCluster) {
+        // Step 3 - Reduce shard limits to hit shard limit with less no of shards
+        try {
+            client().admin()
+                .cluster()
+                .updateSettings(
+                    new ClusterUpdateSettingsRequest().transientSettings(
+                        Settings.builder()
+                            .put(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey(), maxShardsPerNode)
+                            .put(SETTING_MAX_SHARDS_PER_CLUSTER_KEY, maxShardsPerCluster)
+                    )
+                )
+                .get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    private void resetShardLimits() {
+        // Step - 5 Reset the cluster settings
+        ClusterUpdateSettingsRequest resetRequest = new ClusterUpdateSettingsRequest();
+        resetRequest.transientSettings(
+            Settings.builder().putNull(SETTING_CLUSTER_MAX_SHARDS_PER_NODE.getKey()).putNull(SETTING_MAX_SHARDS_PER_CLUSTER_KEY)
+        );
+
+        try {
+            client().admin().cluster().updateSettings(resetRequest).get();
+        } catch (InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 }
