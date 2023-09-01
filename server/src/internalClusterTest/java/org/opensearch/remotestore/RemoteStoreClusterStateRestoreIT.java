@@ -14,6 +14,7 @@ import org.opensearch.action.admin.cluster.settings.ClusterUpdateSettingsRequest
 import org.opensearch.action.support.PlainActionFuture;
 import org.opensearch.common.settings.Settings;
 import org.opensearch.core.action.ActionListener;
+import org.opensearch.gateway.remote.RemoteClusterStateService;
 import org.opensearch.test.OpenSearchIntegTestCase;
 
 import java.io.IOException;
@@ -289,7 +290,12 @@ public class RemoteStoreClusterStateRestoreIT extends BaseRemoteStoreRestoreIT {
         // Step - 4 Delete index metadata file in remote
         try {
             Files.move(
-                absolutePath.resolve(clusterService().state().getClusterName().value() + "/cluster-state/" + prevClusterUUID + "/index"),
+                absolutePath.resolve(
+                    RemoteClusterStateService.encodeString(clusterService().state().getClusterName().value())
+                        + "/cluster-state/"
+                        + prevClusterUUID
+                        + "/index"
+                ),
                 absolutePath.resolve("cluster-state/")
             );
         } catch (IOException e) {
