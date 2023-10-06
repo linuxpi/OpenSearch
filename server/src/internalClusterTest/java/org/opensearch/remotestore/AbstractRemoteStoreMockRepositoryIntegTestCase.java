@@ -27,6 +27,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import static org.opensearch.gateway.remote.RemoteClusterStateService.REMOTE_CLUSTER_STATE_ENABLED_SETTING;
 import static org.opensearch.indices.IndicesService.CLUSTER_REPLICATION_TYPE_SETTING;
 import static org.opensearch.node.remotestore.RemoteStoreNodeAttribute.REMOTE_STORE_CLUSTER_STATE_REPOSITORY_NAME_ATTRIBUTE_KEY;
 import static org.opensearch.node.remotestore.RemoteStoreNodeAttribute.REMOTE_STORE_REPOSITORY_SETTINGS_ATTRIBUTE_KEY_PREFIX;
@@ -103,6 +104,7 @@ public abstract class AbstractRemoteStoreMockRepositoryIntegTestCase extends Abs
             .put("node.attr." + REMOTE_STORE_CLUSTER_STATE_REPOSITORY_NAME_ATTRIBUTE_KEY, REPOSITORY_NAME)
             .put(stateRepoTypeAttributeKey, "mock")
             .put(stateRepoSettingsAttributeKeyPrefix + "location", repoLocation)
+            .put(REMOTE_CLUSTER_STATE_ENABLED_SETTING.getKey(), true)
             .build();
     }
 
