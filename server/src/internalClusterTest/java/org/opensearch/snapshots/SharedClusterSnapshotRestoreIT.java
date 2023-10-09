@@ -82,6 +82,7 @@ import org.opensearch.repositories.RepositoryData;
 import org.opensearch.repositories.RepositoryException;
 import org.opensearch.repositories.blobstore.BlobStoreRepository;
 import org.opensearch.snapshots.mockstore.MockRepository;
+import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.threadpool.ThreadPool;
 
 import java.nio.channels.SeekableByteChannel;
@@ -123,6 +124,7 @@ import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.notNullValue;
 import static org.hamcrest.Matchers.nullValue;
 
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST)
 public class SharedClusterSnapshotRestoreIT extends AbstractSnapshotIntegTestCase {
 
     @Override
