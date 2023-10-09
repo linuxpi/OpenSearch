@@ -1011,7 +1011,7 @@ public class SharedClusterSnapshotRestoreIT extends AbstractSnapshotIntegTestCas
             fail("shouldn't be able to delete in-use repository");
         } catch (Exception ex) {
             logger.info("--> in-use repository deletion failed");
-            assertThat(ex.getMessage(), containsString("trying to modify or unregister repository that is currently used"));
+            assertTrue(ex.getMessage().contains("trying to modify or unregister repository that is currently used") || ex.getMessage().contains("cannot delete a system repository"));
         }
 
         logger.info("--> trying to move repository to another location");
