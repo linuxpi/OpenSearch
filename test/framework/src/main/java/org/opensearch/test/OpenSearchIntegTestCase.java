@@ -37,7 +37,10 @@ import com.carrotsearch.randomizedtesting.annotations.TestGroup;
 import com.carrotsearch.randomizedtesting.generators.RandomNumbers;
 import com.carrotsearch.randomizedtesting.generators.RandomPicks;
 
+import org.apache.hc.core5.http.HttpEntity;
 import org.apache.hc.core5.http.HttpHost;
+import org.apache.hc.core5.http.ParseException;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.apache.lucene.codecs.Codec;
 import org.apache.lucene.search.Sort;
 import org.apache.lucene.search.TotalHits;
@@ -74,6 +77,7 @@ import org.opensearch.action.support.IndicesOptions;
 import org.opensearch.client.AdminClient;
 import org.opensearch.client.Client;
 import org.opensearch.client.ClusterAdminClient;
+import org.opensearch.client.Request;
 import org.opensearch.client.Requests;
 import org.opensearch.client.RestClient;
 import org.opensearch.client.RestClientBuilder;
@@ -1432,6 +1436,12 @@ public abstract class OpenSearchIntegTestCase extends OpenSearchTestCase {
             .execute()
             .actionGet();
         assertNoFailures(actionGet);
+        try {
+            waitForReplicasToCatchUp(indices);
+        } catch(Throwable t) {
+            // We don't want to fail the test just because of this. It should fail on its own asserts.
+            logger.error("Exception in waitForReplicasToCatchUp", t);
+        }
         return actionGet;
     }
 
@@ -1668,10 +1678,80 @@ public abstract class OpenSearchIntegTestCase extends OpenSearchTestCase {
             try {
                 logger.info("WAITING FOR REPLICAS TO CATCH UP");
                 waitForCurrentReplicas();
-            } catch (Exception e) {
+                for(String index: indices) {
+                    refresh(index);
+                    waitForReplicasToCatchUp(index);
+                }
+            } catch (Throwable t) {
+                t.printStackTrace();
                 Assert.fail();
             }
         }
+    }
+
+    public static void waitForReplicasToCatchUp(String... indices) throws Exception {
+        Set<String> allIndices = Set.of(indices);
+        if(allIndices.size() == 0) {
+            allIndices = getAllIndices();
+        }
+        for(String indexName: allIndices) {
+            assertBusy(() -> {
+                Set<Long> allHits = new HashSet<>();
+                for (String node : getNodesForAnIndex(indexName)) {
+                    final SearchResponse response = client(node).prepareSearch(indexName).setSize(0).setPreference("_local").get();
+                    allHits.add(response.getHits().getTotalHits().value);
+                }
+                if (allHits.stream().distinct().count() > 1) {
+                    fail("Count is not same on all the nodes: " + allHits);
+                }
+            }, 30, TimeUnit.SECONDS);
+        }
+    }
+
+    public static Set<String> getAllIndices() {
+        Set<String> indices = new HashSet<>();
+        for (String n : internalCluster().getNodeNames()) {
+            IndicesService indicesService = internalCluster().getInstance(IndicesService.class, n);
+            for (IndexService indexService : indicesService) {
+                if (indexService.getIndexSettings().isSegRepEnabled()) {
+                    for (IndexShard indexShard : indexService) {
+                        indices.add(indexShard.shardId().getIndexName());
+                    }
+                }
+            }
+        }
+        return indices;
+    }
+
+    public static void waitForReplicasToCatchUp(String indexName) throws Exception {
+        assertBusy(() -> {
+            Set<Long> allHits = new HashSet<>();
+            for (String node : getNodesForAnIndex(indexName)) {
+                final SearchResponse response = client(node).prepareSearch(indexName).setSize(0).setPreference("_local").get();
+                allHits.add(response.getHits().getTotalHits().value);
+            }
+            if (allHits.stream().distinct().count() > 1) {
+                fail("Count is not same on all the nodes: " + allHits);
+            }
+        }, 30, TimeUnit.SECONDS);
+    }
+
+    protected static Collection<String> getNodesForAnIndex(String indexName) {
+        final Set<String> nodes = new HashSet<>();
+        ClusterState clusterState = client().admin().cluster().prepareState().get().getState();
+        for (String n : internalCluster().getNodeNames()) {
+            IndicesService indicesService = internalCluster().getInstance(IndicesService.class, n);
+            for (IndexService indexService : indicesService) {
+                if (indexService.getIndexSettings().isSegRepEnabled()) {
+                    for (IndexShard indexShard : indexService) {
+                        if (indexShard.shardId().getIndexName().equals(indexName)) {
+                            nodes.add(clusterState.getRoutingNodes().node(indexShard.getNodeId()).node().getName());
+                        }
+                    }
+                }
+            }
+        }
+        return nodes;
     }
 
     public static void waitForCurrentReplicas() throws Exception {
