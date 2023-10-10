@@ -268,7 +268,7 @@ public abstract class TestCluster implements Closeable {
                         client().admin().cluster().prepareDeleteRepository(repository).execute().actionGet();
                     }
                 } catch (Exception ex) {
-                    logger.error("Exception while deleting repository: {}", repository, ex);
+                    logger.error("Exception while deleting repository: {}", repository);
                     // ignore
                 }
             }

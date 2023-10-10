@@ -50,6 +50,7 @@ import org.opensearch.index.query.QueryBuilder;
 import org.opensearch.index.query.QueryBuilders;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.test.InternalSettingsPlugin;
+import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.test.ParameterizedOpenSearchIntegTestCase;
 
 import java.io.IOException;
@@ -79,6 +80,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.notNullValue;
 
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST)
 public class MoreLikeThisIT extends ParameterizedOpenSearchIntegTestCase {
 
     public MoreLikeThisIT(Settings dynamicSettings) {
