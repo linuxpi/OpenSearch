@@ -60,6 +60,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.sort.FieldSortBuilder;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.test.InternalTestCluster;
+import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.test.ParameterizedOpenSearchIntegTestCase;
 import org.opensearch.test.hamcrest.OpenSearchAssertions;
 import org.junit.After;
@@ -92,6 +93,7 @@ import static org.hamcrest.Matchers.notNullValue;
 /**
  * Tests for scrolling.
  */
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST)
 public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
     public SearchScrollIT(Settings settings) {
         super(settings);
@@ -134,7 +136,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
                 .get();
         }
 
-        client().admin().indices().prepareRefresh().get();
+        refresh();
 
         SearchResponse searchResponse = client().prepareSearch()
             .setQuery(matchAllQuery())
@@ -187,7 +189,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
             client().prepareIndex("test").setId(Integer.toString(i)).setSource("field", i).setRouting(routing).get();
         }
 
-        client().admin().indices().prepareRefresh().get();
+        refresh();
 
         SearchResponse searchResponse = client().prepareSearch()
             .setSearchType(SearchType.QUERY_THEN_FETCH)
@@ -255,7 +257,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
                 .get();
         }
 
-        client().admin().indices().prepareRefresh().get();
+        refresh();
 
         assertThat(client().prepareSearch().setSize(0).setQuery(matchAllQuery()).get().getHits().getTotalHits().value, equalTo(500L));
         assertThat(
@@ -291,7 +293,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
                 searchResponse = client().prepareSearchScroll(searchResponse.getScrollId()).setScroll(TimeValue.timeValueMinutes(2)).get();
             } while (searchResponse.getHits().getHits().length > 0);
 
-            client().admin().indices().prepareRefresh().get();
+            refresh();
             assertThat(client().prepareSearch().setSize(0).setQuery(matchAllQuery()).get().getHits().getTotalHits().value, equalTo(500L));
             assertThat(
                 client().prepareSearch().setSize(0).setQuery(termQuery("message", "test")).get().getHits().getTotalHits().value,
@@ -327,7 +329,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
                 .get();
         }
 
-        client().admin().indices().prepareRefresh().get();
+        refresh();
 
         SearchResponse searchResponse1 = client().prepareSearch()
             .setQuery(matchAllQuery())
@@ -447,7 +449,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
                 .get();
         }
 
-        client().admin().indices().prepareRefresh().get();
+        refresh();
 
         SearchResponse searchResponse1 = client().prepareSearch()
             .setQuery(matchAllQuery())
@@ -745,7 +747,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
         client().prepareIndex("test").setId("1").setSource("created_date", "2020-01-01").get();
         client().prepareIndex("test").setId("2").setSource("created_date", "2020-01-02").get();
         client().prepareIndex("test").setId("3").setSource("created_date", "2020-01-03").get();
-        client().admin().indices().prepareRefresh("test").get();
+        refresh("test");
         SearchResponse resp = null;
         try {
             int totalHits = 0;
@@ -792,7 +794,7 @@ public class SearchScrollIT extends ParameterizedOpenSearchIntegTestCase {
             index("demo", "_doc", "demo-" + i, Collections.emptyMap());
             index("prod", "_doc", "prod-" + i, Collections.emptyMap());
         }
-        client().admin().indices().prepareRefresh().get();
+        refresh();
         SearchResponse respFromDemoIndex = client().prepareSearch("demo")
             .setSize(randomIntBetween(1, 10))
             .setQuery(new MatchAllQueryBuilder())

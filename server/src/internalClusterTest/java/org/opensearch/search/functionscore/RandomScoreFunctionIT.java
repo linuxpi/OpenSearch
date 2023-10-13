@@ -47,6 +47,7 @@ import org.opensearch.script.ScoreAccessor;
 import org.opensearch.script.Script;
 import org.opensearch.script.ScriptType;
 import org.opensearch.search.SearchHit;
+import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.test.ParameterizedOpenSearchIntegTestCase;
 import org.hamcrest.CoreMatchers;
 
@@ -76,6 +77,7 @@ import static org.hamcrest.Matchers.greaterThanOrEqualTo;
 import static org.hamcrest.Matchers.lessThanOrEqualTo;
 import static org.hamcrest.Matchers.nullValue;
 
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST)
 public class RandomScoreFunctionIT extends ParameterizedOpenSearchIntegTestCase {
 
     public RandomScoreFunctionIT(Settings dynamicSettings) {

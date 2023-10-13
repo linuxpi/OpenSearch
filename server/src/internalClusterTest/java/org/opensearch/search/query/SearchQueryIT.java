@@ -2018,7 +2018,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
             .endObject();
 
         index("index", "_doc", "1", source);
-        refresh();
+        refresh("index");
 
         QueryBuilder nestedQuery = QueryBuilders.nestedQuery(
             "section",
