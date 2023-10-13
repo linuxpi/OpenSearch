@@ -293,7 +293,7 @@ public class RemoteClusterStateService implements Closeable {
         deleteStaleClusterMetadata(clusterState.getClusterName().value(), clusterState.metadata().clusterUUID(), RETAINED_MANIFESTS);
 
         final long durationMillis = TimeValue.nsecToMSec(relativeTimeNanosSupplier.getAsLong() - startTimeNanos);
-        if (durationMillis >= slowWriteLoggingThreshold.getMillis()) {
+        if (true) {
             logger.warn(
                 "writing cluster state took [{}ms] which is above the warn threshold of [{}]; "
                     + "wrote  metadata for [{}] indices and skipped [{}] unchanged indices",
@@ -696,7 +696,7 @@ public class RemoteClusterStateService implements Closeable {
         String globalMetadataFileName = clusterMetadataManifest.get().getGlobalMetadataFileName();
         try {
             String[] splitPath = globalMetadataFileName.split("/");
-            return BlobStoreRepository.GLOBAL_METADATA_FORMAT.read(
+            return GLOBAL_METADATA_FORMAT.read(
                 globalMetadataContainer(clusterName, clusterUUID),
                 splitPath[splitPath.length - 1],
                 blobStoreRepository.getNamedXContentRegistry()
@@ -709,11 +709,11 @@ public class RemoteClusterStateService implements Closeable {
         }
     }
 
-//    // TODO: Remove this once Upload PR is merged
-//    private BlobContainer globalMetadataContainer(String clusterName, String clusterUUID) {
-//        // 123456789012_test-cluster/cluster-state/dsgYj10Nkso7/global-metadata/
-//        return blobStoreRepository.blobStore().blobContainer(getCusterMetadataBasePath(clusterName, clusterUUID).add("global-metadata"));
-//    }
+    // // TODO: Remove this once Upload PR is merged
+    // private BlobContainer globalMetadataContainer(String clusterName, String clusterUUID) {
+    // // 123456789012_test-cluster/cluster-state/dsgYj10Nkso7/global-metadata/
+    // return blobStoreRepository.blobStore().blobContainer(getCusterMetadataBasePath(clusterName, clusterUUID).add("global-metadata"));
+    // }
 
     /**
      * Fetch latest ClusterMetadataManifest from remote state store

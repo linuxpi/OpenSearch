@@ -657,7 +657,7 @@ public class PersistedClusterStateService {
                 fullStateWritten = true;
                 final long durationMillis = relativeTimeMillisSupplier.getAsLong() - startTimeMillis;
                 final TimeValue finalSlowWriteLoggingThreshold = slowWriteLoggingThresholdSupplier.get();
-                if (durationMillis >= finalSlowWriteLoggingThreshold.getMillis()) {
+                if (true) {
                     logger.warn(
                         "writing cluster state took [{}ms] which is above the warn threshold of [{}]; "
                             + "wrote full state with [{}] indices",
@@ -691,7 +691,7 @@ public class PersistedClusterStateService {
                 commit(currentTerm, clusterState.version());
                 final long durationMillis = relativeTimeMillisSupplier.getAsLong() - startTimeMillis;
                 final TimeValue finalSlowWriteLoggingThreshold = slowWriteLoggingThresholdSupplier.get();
-                if (durationMillis >= finalSlowWriteLoggingThreshold.getMillis()) {
+                if (true) {
                     logger.warn(
                         "writing cluster state took [{}ms] which is above the warn threshold of [{}]; "
                             + "wrote global metadata [{}] and metadata for [{}] indices and skipped [{}] unchanged indices",

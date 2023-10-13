@@ -39,6 +39,13 @@ testClusters {
     testDistribution = 'archive'
     if (numZones > 1) numberOfZones = numZones
     if (numNodes > 1) numberOfNodes = numNodes
+
+    setting 'cluster.remote_store.state.enabled', 'true'
+    setting 'node.attr.remote_store.segment.repository', 'my-fs-repository'
+    setting 'node.attr.remote_store.translog.repository', 'my-fs-repository'
+    setting 'node.attr.remote_store.state.repository', 'my-fs-repository'
+    setting 'node.attr.remote_store.repository.my-fs-repository.type', 'fs'
+    setting 'node.attr.remote_store.repository.my-fs-repository.settings.location', '/Users/bansvaru/aws/oss-dev/OpenSearch/build/testclusters/runTask-0/repo'
   }
 }
 
