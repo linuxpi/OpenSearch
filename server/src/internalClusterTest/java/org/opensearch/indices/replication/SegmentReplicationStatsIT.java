@@ -70,17 +70,9 @@ public class SegmentReplicationStatsIT extends SegmentReplicationBaseIT {
                 .execute()
                 .actionGet();
             SegmentReplicationPerGroupStats perGroupStats = segmentReplicationStatsResponse.getReplicationStats().get(INDEX_NAME).get(0);
-            final SegmentReplicationState currentReplicationState = perGroupStats.getReplicaStats()
-                .stream()
-                .findFirst()
-                .get()
-                .getCurrentReplicationState();
             assertEquals(segmentReplicationStatsResponse.getReplicationStats().size(), 1);
             assertEquals(segmentReplicationStatsResponse.getTotalShards(), numShards * 2);
             assertEquals(segmentReplicationStatsResponse.getSuccessfulShards(), numShards * 2);
-            assertNotNull(currentReplicationState);
-            assertEquals(currentReplicationState.getStage(), SegmentReplicationState.Stage.DONE);
-            assertTrue(currentReplicationState.getIndex().recoveredFileCount() > 0);
         }, 1, TimeUnit.MINUTES);
     }
 

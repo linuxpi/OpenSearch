@@ -1723,19 +1723,6 @@ public abstract class OpenSearchIntegTestCase extends OpenSearchTestCase {
         return indices;
     }
 
-    public static void waitForReplicasToCatchUp(String indexName) throws Exception {
-        assertBusy(() -> {
-            Set<Long> allHits = new HashSet<>();
-            for (String node : getNodesForAnIndex(indexName)) {
-                final SearchResponse response = client(node).prepareSearch(indexName).setSize(0).setPreference("_local").get();
-                allHits.add(response.getHits().getTotalHits().value);
-            }
-            if (allHits.stream().distinct().count() > 1) {
-                fail("Count is not same on all the nodes: " + allHits);
-            }
-        }, 30, TimeUnit.SECONDS);
-    }
-
     protected static Collection<String> getNodesForAnIndex(String indexName) {
         final Set<String> nodes = new HashSet<>();
         ClusterState clusterState = client().admin().cluster().prepareState().get().getState();
