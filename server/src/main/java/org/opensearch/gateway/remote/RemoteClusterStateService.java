@@ -744,7 +744,7 @@ public class RemoteClusterStateService implements Closeable {
             return validChain.get(0);
         } catch (IOException e) {
             throw new IllegalStateException(
-                String.format(Locale.ROOT, "Error while fetching previous UUIDs from remote store for cluster name: %s", clusterName)
+                String.format(Locale.ROOT, "Error while fetching previous UUIDs from remote store for cluster name: %s", clusterName), e
             );
         }
     }
@@ -765,7 +765,7 @@ public class RemoteClusterStateService implements Closeable {
                 manifest.ifPresent(clusterMetadataManifest -> manifestsByClusterUUID.put(clusterUUID, clusterMetadataManifest));
             } catch (Exception e) {
                 throw new IllegalStateException(
-                    String.format(Locale.ROOT, "Exception in fetching manifest for clusterUUID: %s", clusterUUID)
+                    String.format(Locale.ROOT, "Exception in fetching manifest for clusterUUID: %s", clusterUUID), e
                 );
             }
         }
