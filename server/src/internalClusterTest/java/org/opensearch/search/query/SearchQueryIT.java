@@ -81,6 +81,7 @@ import org.opensearch.search.SearchHit;
 import org.opensearch.search.SearchHits;
 import org.opensearch.search.aggregations.AggregationBuilders;
 import org.opensearch.test.InternalSettingsPlugin;
+import org.opensearch.test.OpenSearchIntegTestCase;
 import org.opensearch.test.ParameterizedOpenSearchIntegTestCase;
 import org.opensearch.test.junit.annotations.TestIssueLogging;
 
@@ -148,6 +149,7 @@ import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.is;
 
+@OpenSearchIntegTestCase.ClusterScope(scope = OpenSearchIntegTestCase.Scope.TEST)
 public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
 
     public SearchQueryIT(Settings dynamicSettings) {
@@ -465,7 +467,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         createIndex("test");
 
         client().prepareIndex("test").setId("1").setSource("field1", "value_1", "field2", "value_2").get();
-        refresh();
+        refresh("test");
 
         SearchResponse searchResponse = client().prepareSearch().setQuery(queryStringQuery("value*")).get();
         assertHitCount(searchResponse, 1L);
@@ -509,7 +511,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         String aMonthAgo = DateTimeFormatter.ISO_LOCAL_DATE.format(now.minusMonths(1));
         String aMonthFromNow = DateTimeFormatter.ISO_LOCAL_DATE.format(now.plusMonths(1));
         client().prepareIndex("test").setId("1").setSource("past", aMonthAgo, "future", aMonthFromNow).get();
-        refresh();
+        refresh("test");
 
         SearchResponse searchResponse = client().prepareSearch().setQuery(queryStringQuery("past:[now-2M/d TO now/d]")).get();
         assertHitCount(searchResponse, 1L);
@@ -1684,6 +1686,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
 
     public void testMultiFieldQueryString() {
         client().prepareIndex("test").setId("1").setSource("field1", "value1", "field2", "value2").setRefreshPolicy(IMMEDIATE).get();
+        refresh("test");
 
         logger.info("regular");
         assertHitCount(client().prepareSearch("test").setQuery(queryStringQuery("value1").field("field1").field("field2")).get(), 1);
@@ -2113,7 +2116,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
             ).setMapping("field1", "type=text,analyzer=lowercase_analyzer")
         );
         client().prepareIndex("test").setId("1").setSource("field1", "Bbb Aaa").get();
-        refresh();
+        refresh("test");
 
         {
             // test default case insensitivity: false
