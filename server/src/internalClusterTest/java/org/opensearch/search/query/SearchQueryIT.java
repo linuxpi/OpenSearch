@@ -537,7 +537,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         String now = DateFormatter.forPattern("strict_date_optional_time").format(Instant.now().atZone(timeZone));
         logger.info(" --> Using time_zone [{}], now is [{}]", timeZone.getId(), now);
         client().prepareIndex("test").setId("1").setSource("past", now).get();
-        refresh();
+        refresh("test");
 
         SearchResponse searchResponse = client().prepareSearch()
             .setQuery(queryStringQuery("past:[now-1m/m TO now+1m/m]").timeZone(timeZone.getId()))
@@ -553,7 +553,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
 
         client().prepareIndex("test").setId("1").setSource("past", "2015-04-05T23:00:00+0000").get();
         client().prepareIndex("test").setId("2").setSource("past", "2015-04-06T00:00:00+0000").get();
-        refresh();
+        refresh("test");
 
         // Timezone set with dates
         SearchResponse searchResponse = client().prepareSearch()
@@ -743,7 +743,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         createIndex("test");
 
         client().prepareIndex("test").setId("1").setSource("field1", "value1").get();
-        refresh();
+        refresh("test");
         SearchResponse searchResponse = client().prepareSearch("test").setQuery(constantScoreQuery(termsQuery("field1", "value1"))).get();
         assertHitCount(searchResponse, 1L);
 
@@ -830,7 +830,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         assertHitCount(searchResponse, 2L);
         assertSearchHits(searchResponse, "1", "2");
 
-        client().admin().indices().prepareRefresh("test").get();
+        refresh("test");
         builder = multiMatchQuery("value1", "field1", "field2").operator(Operator.AND); // Operator only applies on terms inside a field!
                                                                                         // Fields are always OR-ed together.
         searchResponse = client().prepareSearch().setQuery(builder).get();
@@ -875,7 +875,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         assertAcked(prepareCreate("test").setMapping("field1", "type=text,analyzer=classic", "field2", "type=text,analyzer=classic"));
         client().prepareIndex("test").setId("1").setSource("field1", "value1").get();
         client().prepareIndex("test").setId("2").setSource("field1", "value2").get();
-        refresh();
+        refresh("test");
 
         BoolQueryBuilder boolQuery = boolQuery().must(matchQuery("field1", "a").zeroTermsQuery(MatchQuery.ZeroTermsQuery.NONE))
             .must(matchQuery("field1", "value1").zeroTermsQuery(MatchQuery.ZeroTermsQuery.NONE));
@@ -896,7 +896,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         assertAcked(prepareCreate("test").setMapping("field1", "type=text,analyzer=classic", "field2", "type=text,analyzer=classic"));
         client().prepareIndex("test").setId("1").setSource("field1", "value1", "field2", "value2").get();
         client().prepareIndex("test").setId("2").setSource("field1", "value3", "field2", "value4").get();
-        refresh();
+        refresh("test");
 
         BoolQueryBuilder boolQuery = boolQuery().must(
             multiMatchQuery("a", "field1", "field2").zeroTermsQuery(MatchQuery.ZeroTermsQuery.NONE)
@@ -920,7 +920,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         createIndex("test");
         client().prepareIndex("test").setId("1").setSource("field1", new String[] { "value1", "value2", "value3" }).get();
         client().prepareIndex("test").setId("2").setSource("field2", "value1").get();
-        refresh();
+        refresh("test");
 
         MultiMatchQueryBuilder multiMatchQuery = multiMatchQuery("value1 value2 foo", "field1", "field2");
 
@@ -966,7 +966,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         createIndex("test");
         client().prepareIndex("test").setId("1").setSource("field1", new String[] { "value1", "value2", "value3" }).get();
         client().prepareIndex("test").setId("2").setSource("field2", "value1").get();
-        refresh();
+        refresh("test");
 
         BoolQueryBuilder boolQuery = boolQuery().must(termQuery("field1", "value1"))
             .should(boolQuery().should(termQuery("field1", "value1")).should(termQuery("field1", "value2")).minimumShouldMatch(3));
@@ -998,7 +998,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         createIndex("test");
         client().prepareIndex("test").setId("1").setSource("str", "foobar", "date", "2012-02-01", "num", 12).get();
         client().prepareIndex("test").setId("2").setSource("str", "fred", "date", "2012-02-05", "num", 20).get();
-        refresh();
+        refresh("test");
 
         SearchResponse searchResponse = client().prepareSearch().setQuery(queryStringQuery("str:foobaz~1")).get();
         assertNoFailures(searchResponse);
@@ -1034,7 +1034,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
         createIndex("test");
         client().prepareIndex("test").setId("1").setSource("str", "foobar", "date", "2012-02-01", "num", 12).get();
         client().prepareIndex("test").setId("2").setSource("str", "fred", "date", "2012-02-05", "num", 20).get();
-        refresh();
+        refresh("test");
 
         SearchResponse searchResponse = client().prepareSearch().setQuery(queryStringQuery("num:>19")).get();
         assertHitCount(searchResponse, 1L);
@@ -1337,7 +1337,7 @@ public class SearchQueryIT extends ParameterizedOpenSearchIntegTestCase {
             .setId("17")
             .setSource("num_byte", 17, "num_short", 17, "num_integer", 17, "num_long", 17, "num_float", 17, "num_double", 17)
             .get();
-        refresh();
+        refresh("test");
 
         SearchResponse searchResponse;
         logger.info("--> term query on 1");
