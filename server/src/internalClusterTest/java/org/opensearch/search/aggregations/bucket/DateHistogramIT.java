@@ -1801,7 +1801,7 @@ public class DateHistogramIT extends ParameterizedOpenSearchIntegTestCase {
     }
 
     private void assertMultiSortResponse(int[] expectedDays, BucketOrder... order) {
-        refresh("sort_idx");
+        refresh();
         ZonedDateTime[] expectedKeys = Arrays.stream(expectedDays).mapToObj(d -> date(1, d)).toArray(ZonedDateTime[]::new);
         SearchResponse response = client().prepareSearch("sort_idx")
             .addAggregation(

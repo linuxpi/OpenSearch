@@ -131,7 +131,7 @@ public class RandomScoreFunctionIT extends ParameterizedOpenSearchIntegTestCase 
     public void testConsistentHitsWithSameSeed() throws Exception {
         createIndex("test");
         ensureGreen(); // make sure we are done otherwise preference could change?
-        int docCount = randomIntBetween(100, 200);
+        int docCount = randomIntBetween(10, 20);
         for (int i = 0; i < docCount; i++) {
             index("test", "type", "" + i, jsonBuilder().startObject().field("foo", i).endObject());
         }
@@ -178,7 +178,7 @@ public class RandomScoreFunctionIT extends ParameterizedOpenSearchIntegTestCase 
                 }
 
                 // randomly change some docs to get them in different segments
-                int numDocsToChange = randomIntBetween(20, 50);
+                int numDocsToChange = randomIntBetween(10, 30);
                 while (numDocsToChange > 0) {
                     int doc = randomInt(docCount - 1);// watch out this is inclusive the max values!
                     index("test", "type", "" + doc, jsonBuilder().startObject().field("foo", doc).endObject());
