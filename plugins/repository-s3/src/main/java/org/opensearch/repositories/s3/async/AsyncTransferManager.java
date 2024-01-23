@@ -352,6 +352,11 @@ public final class AsyncTransferManager {
                 AsyncRequestBody.fromInputStream(inputStream, inputStreamContainer.getContentLength(), streamReadExecutor)
             ).handle((resp, throwable) -> {
                 try {
+                    Thread.sleep(5000);
+                } catch (InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+                try {
                     inputStream.close();
                 } catch (IOException e) {
                     log.error(
