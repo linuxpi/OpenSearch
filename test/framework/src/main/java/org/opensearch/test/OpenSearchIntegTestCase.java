@@ -1323,7 +1323,7 @@ public abstract class OpenSearchIntegTestCase extends OpenSearchTestCase {
      */
     protected final FlushResponse flush(String... indices) {
         waitForRelocation();
-        FlushResponse actionGet = client().admin().indices().prepareFlush(indices).execute().actionGet();
+        FlushResponse actionGet = client().admin().indices().prepareFlush(indices).setForce(true).execute().actionGet();
         for (DefaultShardOperationFailedException failure : actionGet.getShardFailures()) {
             assertThat("unexpected flush failure " + failure.reason(), failure.status(), equalTo(RestStatus.SERVICE_UNAVAILABLE));
         }

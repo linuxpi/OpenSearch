@@ -1219,6 +1219,7 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
     public synchronized void setLatestReplicationCheckpoint(ReplicationCheckpoint checkpoint) {
         assert indexSettings.isSegRepEnabled();
         if (checkpoint.equals(latestReplicationCheckpoint) == false) {
+            logger.error("updating replication checkpoint - [{}]", checkpoint.getSegmentsGen());
             this.latestReplicationCheckpoint = checkpoint;
         }
         if (primaryMode) {
@@ -1271,6 +1272,7 @@ public class ReplicationTracker extends AbstractIndexShardComponent implements L
     public synchronized void startReplicationLagTimers(ReplicationCheckpoint checkpoint) {
         assert indexSettings.isSegRepEnabled();
         if (checkpoint.equals(latestReplicationCheckpoint) == false) {
+            logger.error("updating replication checkpoint - {}", checkpoint.getSegmentsGen());
             this.latestReplicationCheckpoint = checkpoint;
         }
         if (primaryMode) {

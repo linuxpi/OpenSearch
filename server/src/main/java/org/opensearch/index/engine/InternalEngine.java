@@ -267,7 +267,7 @@ public class InternalEngine extends Engine {
 
                     @Override
                     public void onAfterTranslogRecovery() {
-                        flush(false, true);
+//                        flush(false, true);
                         translogManager.trimUnreferencedTranslogFiles();
                     }
 

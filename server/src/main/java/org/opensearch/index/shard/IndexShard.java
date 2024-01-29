@@ -710,7 +710,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                                 assert newRouting.primary() && currentRouting.primary() == false;
                                 ReplicationTimer timer = new ReplicationTimer();
                                 timer.start();
-                                logger.debug(
+                                logger.info(
                                     "Resetting engine on promotion of shard [{}] to primary, startTime {}\n",
                                     shardId,
                                     timer.startTime()
@@ -1698,7 +1698,9 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         final ReplicationCheckpoint latestReplicationCheckpoint = getLatestReplicationCheckpoint();
         if (latestReplicationCheckpoint.getSegmentInfosVersion() == segmentInfos.getVersion()
             && latestReplicationCheckpoint.getSegmentsGen() == segmentInfos.getGeneration()
-            && latestReplicationCheckpoint.getPrimaryTerm() == getOperationPrimaryTerm()) {
+//            && latestReplicationCheckpoint.getPrimaryTerm() == getOperationPrimaryTerm()
+        ) {
+            logger.info("------- >>>> using old replication checkpoint");
             return latestReplicationCheckpoint;
         }
         final Map<String, StoreFileMetadata> metadataMap = store.getSegmentMetadataMap(segmentInfos);
@@ -4800,7 +4802,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         newEngineReference.get()
             .translogManager()
             .recoverFromTranslog(translogRunner, newEngineReference.get().getProcessedLocalCheckpoint(), recoverUpto);
-        newEngineReference.get().refresh("reset_engine");
+//        newEngineReference.get().refresh("reset_engine");
         synchronized (engineMutex) {
             verifyNotClosed();
             IOUtils.close(currentEngineReference.getAndSet(newEngineReference.get()));
@@ -4851,7 +4853,7 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
         boolean syncSegmentSuccess = false;
         long startTimeMs = System.currentTimeMillis();
         assert indexSettings.isRemoteStoreEnabled();
-        logger.trace("Downloading segments from remote segment store");
+        logger.error("Downloading segments from remote segment store");
         RemoteSegmentStoreDirectory remoteDirectory = getRemoteDirectory();
         // We need to call RemoteSegmentStoreDirectory.init() in order to get latest metadata of the files that
         // are uploaded to the remote segment store.
@@ -4892,11 +4894,13 @@ public class IndexShard extends AbstractIndexShardComponent implements IndicesCl
                 // Extra segments will be wiped on engine open.
                 for (String file : List.of(store.directory().listAll())) {
                     if (file.startsWith(IndexFileNames.SEGMENTS)) {
+                        logger.error("deleteing segment files - [{}]", file);
                         store.deleteQuiet(file);
                     }
                 }
                 assert Arrays.stream(store.directory().listAll()).filter(f -> f.startsWith(IndexFileNames.SEGMENTS)).findAny().isEmpty()
                     : "There should not be any segments file in the dir";
+                logger.error("commiting segment infos {}", infosSnapshot.getGeneration());
                 store.commitSegmentInfos(infosSnapshot, processedLocalCheckpoint, processedLocalCheckpoint);
             }
             syncSegmentSuccess = true;
