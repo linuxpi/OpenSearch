@@ -1,0 +1,82 @@
+/*
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * The OpenSearch Contributors require contributions made to
+ * this file be licensed under the Apache-2.0 license or a
+ * compatible open source license.
+ */
+
+import org.apache.tools.ant.taskdefs.condition.Os
+import org.opensearch.gradle.Architecture
+import org.opensearch.gradle.OS
+import org.opensearch.gradle.info.BuildParams
+
+apply plugin: 'opensearch.internal-cluster-test'
+
+opensearchplugin {
+  description 'Opentelemetry based telemetry implementation.'
+  classname 'org.opensearch.sampleofflinetask.SampleOfflineTaskPlugin'
+  hasClientJar = false
+}
+
+dependencies {
+  api project(":libs:opensearch-offline-tasks")
+  runtimeOnly "org.jetbrains.kotlin:kotlin-stdlib:${versions.kotlin}"
+  runtimeOnly "com.squareup.okhttp3:okhttp:4.11.0"
+  runtimeOnly "com.squareup.okio:okio-jvm:3.5.0"
+}
+
+
+thirdPartyAudit {
+  ignoreMissingClasses(
+    'android.net.http.X509TrustManagerExtensions',
+    'android.net.ssl.SSLSockets',
+    'android.os.Build$VERSION',
+    'android.security.NetworkSecurityPolicy',
+    'android.util.Log',
+    'com.google.common.io.ByteStreams',
+    'com.google.common.util.concurrent.ListenableFuture',
+    'io.grpc.CallOptions',
+    'io.grpc.Channel',
+    'io.grpc.Drainable',
+    'io.grpc.KnownLength',
+    'io.grpc.ManagedChannel',
+    'io.grpc.MethodDescriptor',
+    'io.grpc.MethodDescriptor$Builder',
+    'io.grpc.MethodDescriptor$Marshaller',
+    'io.grpc.MethodDescriptor$MethodType',
+    'io.grpc.stub.AbstractFutureStub',
+    'io.grpc.stub.AbstractStub',
+    'io.grpc.stub.ClientCalls',
+    'org.bouncycastle.jsse.BCSSLParameters',
+    'org.bouncycastle.jsse.BCSSLSocket',
+    'org.conscrypt.Conscrypt',
+    'org.conscrypt.Conscrypt$Version',
+    'org.conscrypt.ConscryptHostnameVerifier',
+    'org.openjsse.javax.net.ssl.SSLParameters',
+    'org.openjsse.javax.net.ssl.SSLSocket',
+    'kotlin.io.path.PathsKt',
+  )
+}
+//
+//tasks.named("bundlePlugin").configure {
+//  from('config/telemetry-otel') {
+//    into 'config'
+//  }
+//}
+
+tasks.register("writeTestJavaPolicy") {
+  doLast {
+    final File tmp = file("${buildDir}/tmp")
+    if (tmp.exists() == false && tmp.mkdirs() == false) {
+      throw new GradleException("failed to create temporary directory [${tmp}]")
+    }
+    final File javaPolicy = file("${tmp}/java.policy")
+    javaPolicy.write(
+      [
+        "grant {",
+        "  permission java.io.FilePermission \"config\", \"read\";",
+        "};"
+      ].join("\n"))
+  }
+}

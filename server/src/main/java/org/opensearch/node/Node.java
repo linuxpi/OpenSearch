@@ -175,6 +175,10 @@ import org.opensearch.monitor.fs.FsProbe;
 import org.opensearch.monitor.jvm.JvmInfo;
 import org.opensearch.node.remotestore.RemoteStoreNodeService;
 import org.opensearch.node.resource.tracker.NodeResourceUsageTracker;
+import org.opensearch.offlinetasks.BackgroundTaskService;
+import org.opensearch.offlinetasks.TaskClient;
+import org.opensearch.offlinetasks.TaskClientPlugin;
+import org.opensearch.offlinetasks.TaskWorkerPlugin;
 import org.opensearch.persistent.PersistentTasksClusterService;
 import org.opensearch.persistent.PersistentTasksExecutor;
 import org.opensearch.persistent.PersistentTasksExecutorRegistry;
@@ -738,6 +742,14 @@ public class Node implements Closeable {
                 remoteClusterStateService = null;
             }
 
+            BackgroundTaskService backgroundTaskService = new BackgroundTaskService(threadPool);
+
+//            final Collection<TaskClientPlugin> taskClientPlugins = pluginsService.filterPlugins(TaskClientPlugin.class);
+//            taskClientPlugins.stream().findFirst().ifPresent(taskClientPlugin -> backgroundTaskService.registerTaskClient(taskClientPlugin.registerTaskClient()));
+
+            final Collection<TaskWorkerPlugin> offlineTaskPlugins = pluginsService.filterPlugins(TaskWorkerPlugin.class);
+            offlineTaskPlugins.forEach(taskWorkerPlugin -> backgroundTaskService.registerTask(taskWorkerPlugin.getType(), taskWorkerPlugin.registerTaskWorker()));
+
             // collect engine factory providers from plugins
             final Collection<EnginePlugin> enginePlugins = pluginsService.filterPlugins(EnginePlugin.class);
             final Collection<Function<IndexSettings, Optional<EngineFactory>>> engineFactoryProviders = enginePlugins.stream()
@@ -903,6 +915,9 @@ public class Node implements Closeable {
                             .map(p -> (SearchRequestOperationsListener) p)
                     ).toArray(SearchRequestOperationsListener[]::new)
                 );
+
+            final TaskClient taskClient = (TaskClient) pluginComponents.stream()
+                            .filter(p -> p instanceof TaskClient).findFirst().get();
 
             ActionModule actionModule = new ActionModule(
                 settings,
@@ -1261,6 +1276,8 @@ public class Node implements Closeable {
                 b.bind(NetworkService.class).toInstance(networkService);
                 b.bind(UpdateHelper.class).toInstance(new UpdateHelper(scriptService));
                 b.bind(MetadataIndexUpgradeService.class).toInstance(metadataIndexUpgradeService);
+                b.bind(TaskClient.class).toInstance(taskClient);
+                b.bind(BackgroundTaskService.class).toInstance(backgroundTaskService);
                 b.bind(ClusterInfoService.class).toInstance(clusterInfoService);
                 b.bind(SnapshotsInfoService.class).toInstance(snapshotsInfoService);
                 b.bind(GatewayMetaState.class).toInstance(gatewayMetaState);
@@ -1551,6 +1568,8 @@ public class Node implements Closeable {
         }
 
         logger.info("started");
+
+        if (clusterService.localNode().getRoles().isEmpty()) injector.getInstance(BackgroundTaskService.class).start(injector.getInstance(TaskClient.class));
 
         pluginsService.filterPlugins(ClusterPlugin.class).forEach(plugin -> plugin.onNodeStarted(clusterService.localNode()));
 
