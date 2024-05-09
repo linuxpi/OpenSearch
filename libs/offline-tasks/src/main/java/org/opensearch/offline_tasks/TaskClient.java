@@ -34,7 +34,7 @@ public interface TaskClient {
      *
      * @param taskId TaskId of the task to be claimed
      */
-    void claimTask(TaskId taskId);
+    boolean claimTask(TaskId taskId);
 
     /**
      * Get task from TaskStore/Queue
