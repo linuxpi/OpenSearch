@@ -180,6 +180,8 @@ import org.opensearch.monitor.jvm.JvmInfo;
 import org.opensearch.node.remotestore.RemoteStoreNodeService;
 import org.opensearch.node.resource.tracker.NodeResourceUsageTracker;
 import org.opensearch.offline_tasks.clients.TaskManagerClient;
+import org.opensearch.offline_tasks.task.TaskType;
+import org.opensearch.offline_tasks.worker.TaskWorker;
 import org.opensearch.persistent.PersistentTasksClusterService;
 import org.opensearch.persistent.PersistentTasksExecutor;
 import org.opensearch.persistent.PersistentTasksExecutorRegistry;
@@ -201,6 +203,7 @@ import org.opensearch.plugins.MapperPlugin;
 import org.opensearch.plugins.MetadataUpgrader;
 import org.opensearch.plugins.NetworkPlugin;
 import org.opensearch.plugins.OfflineTaskManagerClientPlugin;
+import org.opensearch.plugins.OfflineTaskWorkerPlugin;
 import org.opensearch.plugins.PersistentTaskPlugin;
 import org.opensearch.plugins.Plugin;
 import org.opensearch.plugins.PluginsService;
@@ -234,6 +237,7 @@ import org.opensearch.snapshots.RestoreService;
 import org.opensearch.snapshots.SnapshotShardsService;
 import org.opensearch.snapshots.SnapshotsInfoService;
 import org.opensearch.snapshots.SnapshotsService;
+import org.opensearch.tasks.BackgroundTaskService;
 import org.opensearch.tasks.Task;
 import org.opensearch.tasks.TaskCancellationMonitoringService;
 import org.opensearch.tasks.TaskCancellationMonitoringSettings;
@@ -292,6 +296,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.stream.Collectors.toList;
+import static java.util.stream.Collectors.toMap;
 import static org.opensearch.common.util.FeatureFlags.TELEMETRY;
 import static org.opensearch.env.NodeEnvironment.collectFileCacheDataPath;
 import static org.opensearch.index.ShardIndexingPressureSettings.SHARD_INDEXING_PRESSURE_ENABLED_ATTRIBUTE_KEY;
@@ -1272,10 +1277,22 @@ public class Node implements Closeable {
                 .flatMap(List::stream)
                 .collect(toList());
 
-            final Optional<TaskManagerClient> taskClient = pluginsService.filterPlugins(OfflineTaskManagerClientPlugin.class)
+            final Optional<TaskManagerClient> taskClientOptional = pluginsService.filterPlugins(OfflineTaskManagerClientPlugin.class)
                 .stream()
                 .map((OfflineTaskManagerClientPlugin taskClientPlugin) -> taskClientPlugin.getTaskManagerClient(client, clusterService, threadPool))
                 .findFirst();
+
+            BackgroundTaskService backgroundTaskService;
+            if (taskClientOptional.isPresent() && DiscoveryNode.isOfflineNode(settings)) {
+                final Map<TaskType, TaskWorker> taskWorkers = pluginsService.filterPlugins(OfflineTaskWorkerPlugin.class)
+                    .stream()
+                    .collect(toMap(OfflineTaskWorkerPlugin::getTaskType, v -> v.getTaskWorker(client, clusterService, threadPool)));
+                backgroundTaskService = new BackgroundTaskService(threadPool, taskClientOptional.get(), taskWorkers);
+            } else if (DiscoveryNode.isOfflineNode(settings)) {
+                throw new IllegalStateException("A TaskClient implementation is required for Offline Node");
+            } else {
+                backgroundTaskService = null;
+            }
 
             final PersistentTasksExecutorRegistry registry = new PersistentTasksExecutorRegistry(tasksExecutors);
             final PersistentTasksClusterService persistentTasksClusterService = new PersistentTasksClusterService(
@@ -1384,7 +1401,10 @@ public class Node implements Closeable {
                 b.bind(SegmentReplicationStatsTracker.class).toInstance(segmentReplicationStatsTracker);
                 b.bind(SearchRequestOperationsCompositeListenerFactory.class).toInstance(searchRequestOperationsCompositeListenerFactory);
 
-                taskClient.ifPresent(value -> b.bind(TaskManagerClient.class).toInstance(value));
+                taskClientOptional.ifPresent(value -> b.bind(TaskManagerClient.class).toInstance(value));
+                if (backgroundTaskService != null) {
+                    b.bind(BackgroundTaskService.class).toInstance(backgroundTaskService);
+                }
             });
             injector = modules.createInjector();
 
