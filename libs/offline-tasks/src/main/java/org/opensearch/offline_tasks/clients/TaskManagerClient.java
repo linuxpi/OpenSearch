@@ -6,11 +6,12 @@
  * compatible open source license.
  */
 
-package org.opensearch.offline_tasks;
+package org.opensearch.offline_tasks.clients;
 
 import org.opensearch.common.annotation.ExperimentalApi;
 import org.opensearch.offline_tasks.task.Task;
 import org.opensearch.offline_tasks.task.TaskId;
+import org.opensearch.offline_tasks.worker.WorkerNode;
 
 import java.util.List;
 
@@ -20,21 +21,7 @@ import java.util.List;
  * @opensearch.experimental
  */
 @ExperimentalApi
-public interface TaskClient {
-
-    /**
-     * Submit a new task to TaskStore/Queue
-     *
-     * @param task Task to be submitted for execution on offline nodes
-     */
-    void submitTask(Task task);
-
-    /**
-     * Claim task from TaskStore/Queue. This ensures no 2 Offline Nodes work on the same task.
-     *
-     * @param taskId TaskId of the task to be claimed
-     */
-    void claimTask(TaskId taskId);
+public interface TaskManagerClient {
 
     /**
      * Get task from TaskStore/Queue
@@ -60,25 +47,31 @@ public interface TaskClient {
     void cancelTask(TaskId taskId);
 
     /**
-     * List all unassigned tasks
+     * List all tasks applying all the filters present in listTaskRequest
      *
-     * @return list of all the task which are note not assigned to any worker
+     * @param listTaskRequest ListTaskRequest
+     * @return list of all the task matching the filters in listTaskRequest
      */
-    List<Task> getUnassignedTasks();
+    List<Task> listTasks(ListTaskRequest listTaskRequest);
 
     /**
-     * List all active tasks
+     * Assign Task to a particular WorkerNode. This ensures no 2 worker Nodes work on the same task.
+     * This API can be used in both pull and push models of task assignment.
      *
-     * @return list of all the task which are running on any worker
+     * @param taskId TaskId of the task to be assigned
+     * @param node WorkerNode task is being assigned to
+     * @return true if task is assigned successfully, false otherwise
      */
-    List<Task> getActiveTasks();
+    boolean assignTask(TaskId taskId, WorkerNode node);
 
     /**
-     * List all completed tasks
+     * List all tasks assigned to a WorkerNode.
+     * Useful when the implementation uses a separate store for Task assignments to Worker nodes
      *
-     * @return list of all the task which have completed execution
+     * @param listTaskRequest ListTaskRequest
+     * @return list of all tasks assigned to a WorkerNode
      */
-    List<Task> getCompletedTasks();
+    List<Task> getAssignedTasks(ListTaskRequest listTaskRequest);
 
     /**
      * Sends task heart beat to Task Store/Queue
