@@ -15,7 +15,8 @@ import org.opensearch.common.lifecycle.LifecycleComponent;
 import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractAsyncTask;
-import org.opensearch.offline_tasks.TaskClient;
+import org.opensearch.offline_tasks.clients.ListTaskRequest;
+import org.opensearch.offline_tasks.clients.TaskManagerClient;
 import org.opensearch.offline_tasks.task.Task;
 import org.opensearch.offline_tasks.task.TaskType;
 import org.opensearch.offline_tasks.worker.TaskWorker;
@@ -35,13 +36,13 @@ public class BackgroundTaskService implements LifecycleComponent {
     /**
      * TaskClient used to interact with TaskStore/Queue for Task Management and Coordination
      */
-    private final TaskClient taskClient;
+    private final TaskManagerClient taskClient;
     /**
      * Provides Corresponding TaskWorker to execute for each Task
      */
     private final Map<TaskType, TaskWorker> taskWorkerMap;
 
-    public BackgroundTaskService(ThreadPool threadPool, TaskClient taskClient, Map<TaskType, TaskWorker> taskWorkerMap) {
+    public BackgroundTaskService(ThreadPool threadPool, TaskManagerClient taskClient, Map<TaskType, TaskWorker> taskWorkerMap) {
         this.threadPool = threadPool;
         this.taskClient = taskClient;
         this.taskWorkerMap = taskWorkerMap;
@@ -79,12 +80,10 @@ public class BackgroundTaskService implements LifecycleComponent {
     }
 
     public void maybeExecuteTasks() {
-        List<Task> unassignedTasks = taskClient.getUnassignedTasks();
-        for (Task task : unassignedTasks) {
+        List<Task> assignedTasks = taskClient.getAssignedTasks(new ListTaskRequest());
+        for (Task task : assignedTasks) {
             if (taskWorkerMap.containsKey(task.getTaskType())) {
-                if (taskClient.claimTask(task.getTaskId())) {
-                    taskWorkerMap.get(task.getTaskType()).executeTask(task);
-                }
+                taskWorkerMap.get(task.getTaskType()).executeTask(task);
             }
         }
     }

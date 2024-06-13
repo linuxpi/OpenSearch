@@ -179,7 +179,6 @@ import org.opensearch.monitor.fs.FsProbe;
 import org.opensearch.monitor.jvm.JvmInfo;
 import org.opensearch.node.remotestore.RemoteStoreNodeService;
 import org.opensearch.node.resource.tracker.NodeResourceUsageTracker;
-import org.opensearch.offline_tasks.clients.TaskClient;
 import org.opensearch.offline_tasks.clients.TaskManagerClient;
 import org.opensearch.offline_tasks.task.TaskType;
 import org.opensearch.offline_tasks.worker.TaskWorker;
