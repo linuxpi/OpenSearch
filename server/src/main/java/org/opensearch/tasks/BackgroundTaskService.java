@@ -15,11 +15,11 @@ import org.opensearch.common.lifecycle.LifecycleComponent;
 import org.opensearch.common.lifecycle.LifecycleListener;
 import org.opensearch.common.unit.TimeValue;
 import org.opensearch.common.util.concurrent.AbstractAsyncTask;
-import org.opensearch.offline_tasks.clients.ListTaskRequest;
-import org.opensearch.offline_tasks.clients.TaskManagerClient;
-import org.opensearch.offline_tasks.task.Task;
-import org.opensearch.offline_tasks.task.TaskType;
-import org.opensearch.offline_tasks.worker.TaskWorker;
+import org.opensearch.task.commons.clients.ListTaskRequest;
+import org.opensearch.task.commons.clients.TaskManagerClient;
+import org.opensearch.task.commons.task.Task;
+import org.opensearch.task.commons.task.TaskType;
+import org.opensearch.task.commons.worker.TaskWorker;
 import org.opensearch.threadpool.ThreadPool;
 
 import java.util.List;
