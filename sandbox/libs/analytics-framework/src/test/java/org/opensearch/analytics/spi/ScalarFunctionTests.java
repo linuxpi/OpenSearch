@@ -35,6 +35,7 @@ public class ScalarFunctionTests extends OpenSearchTestCase {
         assertEquals(ScalarFunction.CAST, ScalarFunction.fromSqlKind(SqlKind.CAST));
         assertEquals(ScalarFunction.SAFE_CAST, ScalarFunction.fromSqlKind(SqlKind.SAFE_CAST));
         assertEquals(ScalarFunction.COALESCE, ScalarFunction.fromSqlKind(SqlKind.COALESCE));
+        assertEquals(ScalarFunction.ARRAY_CONTAINS, ScalarFunction.fromSqlKind(SqlKind.ARRAY_CONTAINS));
     }
 
     public void testFromSqlKindReturnsNullForOtherKind() {

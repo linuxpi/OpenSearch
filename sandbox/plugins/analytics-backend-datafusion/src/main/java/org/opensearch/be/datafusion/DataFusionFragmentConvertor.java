@@ -178,6 +178,13 @@ public class DataFusionFragmentConvertor implements FragmentConvertor {
         FunctionMappings.s(RexExtractMultiAdapter.LOCAL_REX_EXTRACT_MULTI_OP, "rex_extract_multi"),
         FunctionMappings.s(RexOffsetAdapter.LOCAL_REX_OFFSET_OP, "rex_offset"),
         FunctionMappings.s(SqlLibraryOperators.ARRAY_LENGTH, "array_length"),
+        FunctionMappings.s(SqlLibraryOperators.ARRAY_CONTAINS, "array_contains"),
+        FunctionMappings.s(ArrayAnyPredicateAdapter.LOCAL_ARRAY_ANY_COMPARE, "array_any_compare"),
+        FunctionMappings.s(ArrayAnyPredicateAdapter.LOCAL_ARRAY_ANY_BETWEEN, "array_any_between"),
+        FunctionMappings.s(ArrayElementWiseAdapter.LOCAL_ARRAY_MAP_STRING, "array_map_string"),
+        FunctionMappings.s(ArrayElementWiseAdapter.LOCAL_ARRAY_MAP_INTEGER, "array_map_integer"),
+        FunctionMappings.s(ArrayElementWiseAdapter.LOCAL_ARRAY_NULLIF, "array_nullif"),
+        FunctionMappings.s(ArrayElementWiseAdapter.LOCAL_ARRAY_COALESCE, "array_coalesce"),
         FunctionMappings.s(NumericConversionFunctionAdapter.NUM, "num"),
         FunctionMappings.s(NumericConversionFunctionAdapter.AUTO, "auto"),
         FunctionMappings.s(NumericConversionFunctionAdapter.MEMK, "memk"),
@@ -211,6 +218,7 @@ public class DataFusionFragmentConvertor implements FragmentConvertor {
         FunctionMappings.s(SqlLibraryOperators.REGEXP_REPLACE_3, "regexp_replace"),
         FunctionMappings.s(SqlLibraryOperators.ARRAY_LENGTH, "array_length"),
         FunctionMappings.s(MultiValueSortRewriter.LIST_MIN_OP, "list_min"),
+        FunctionMappings.s(MultiValueSortRewriter.LIST_MAX_OP, "list_max"),
         FunctionMappings.s(SqlLibraryOperators.ARRAY_SLICE, "array_slice"),
         FunctionMappings.s(SqlLibraryOperators.ARRAY_DISTINCT, "array_distinct"),
         FunctionMappings.s(MakeArrayAdapter.LOCAL_MAKE_ARRAY_OP, "make_array"),
@@ -525,8 +533,16 @@ public class DataFusionFragmentConvertor implements FragmentConvertor {
     public byte[] attachPartialAggOnTop(RelNode partialAggFragment, byte[] innerBytes) {
         LOGGER.debug("Attaching partial aggregate on top of {} inner bytes", innerBytes.length);
         Plan inner = decodePlan(innerBytes);
-        Rel wrapper = convertStandalone(partialAggFragment);
-        Plan rewired = rewire(
+        RelNode partialInput = partialAggFragment.getInput(0);
+        RelNode placeholder = new StageInputTableScan(
+            partialInput.getCluster(),
+            partialInput.getTraitSet(),
+            "partial-input",
+            partialInput.getRowType()
+        );
+        RelNode isolatedPartialAgg = partialAggFragment.copy(partialAggFragment.getTraitSet(), List.of(placeholder));
+        Rel wrapper = convertStandalone(isolatedPartialAgg);
+        Plan rewired = rewirePreservingUnaryChain(
             inner,
             withAggregationPhase(wrapper, Expression.AggregationPhase.INITIAL_TO_INTERMEDIATE),
             fieldNames(partialAggFragment)
@@ -650,6 +666,15 @@ public class DataFusionFragmentConvertor implements FragmentConvertor {
         return Plan.builder().addRoots(Plan.Root.builder().input(rewired).names(wrapperNames).build()).build();
     }
 
+    /** Rewires an isolated partial wrapper while preserving relations inserted by preprocessing. */
+    private static Plan rewirePreservingUnaryChain(Plan inner, Rel wrapper, List<String> wrapperNames) {
+        if (inner.getRoots().isEmpty()) {
+            throw new IllegalArgumentException("Inner Substrait plan has no root relation to rewire under wrapper");
+        }
+        Rel rewired = replaceInputPreservingUnaryChain(wrapper, inner.getRoots().get(0).getInput());
+        return Plan.builder().addRoots(Plan.Root.builder().input(rewired).names(wrapperNames).build()).build();
+    }
+
     /** Wrapper's output column names from its Calcite row type. */
     private static List<String> fieldNames(RelNode fragment) {
         return fragment.getRowType().getFieldList().stream().map(RelDataTypeField::getName).toList();
@@ -666,20 +691,20 @@ public class DataFusionFragmentConvertor implements FragmentConvertor {
             return Filter.builder().from(filter).input(newInput).build();
         }
         if (wrapper instanceof Project project) {
-            // Lifted-window shape: outer Project references a window column from the lower Project.
+            // Lifted-window shape: the outer Project references a window column from the lower
+            // Project, so both Substrait relations belong to the same Calcite wrapper.
             if (project.getInput() instanceof Project lower && containsWindowFunction(lower)) {
-                Rel rewiredLower = replaceInput(lower, newInput);
-                return Project.builder().from(project).input(rewiredLower).build();
+                return Project.builder().from(project).input(replaceInput(lower, newInput)).build();
             }
             return Project.builder().from(project).input(newInput).build();
         }
         if (wrapper instanceof Fetch fetch) {
-            // A single Calcite LogicalSort carrying both a collation AND a fetch/offset lowers to
-            // Fetch(Sort(input)) — two Substrait rels from one node. Rewiring the Fetch's input
-            // directly would drop the Sort and lose global order before the limit. Descend into
-            // the Sort so the shape becomes Fetch(Sort(newInput)): gather, sort globally, then limit.
+            // A LogicalSort carrying both collation and fetch lowers to Fetch(Sort(input)).
             Rel rewiredInput = fetch.getInput() instanceof Sort ? replaceInput(fetch.getInput(), newInput) : newInput;
             return Fetch.builder().from(fetch).input(rewiredInput).build();
+        }
+        if (wrapper instanceof ExtensionSingle extension) {
+            return ExtensionSingle.from(extension.getDetail(), newInput).build();
         }
         throw new UnsupportedOperationException(
             "Cannot attach-on-top a Substrait Rel of type " + wrapper.getClass().getSimpleName() + " — no single-input rewire defined"
@@ -687,12 +712,38 @@ public class DataFusionFragmentConvertor implements FragmentConvertor {
     }
 
     private static boolean containsWindowFunction(Project project) {
-        for (Expression expr : project.getExpressions()) {
-            if (expr instanceof Expression.WindowFunctionInvocation) {
+        for (Expression expression : project.getExpressions()) {
+            if (expression instanceof Expression.WindowFunctionInvocation) {
                 return true;
             }
         }
         return false;
+    }
+
+    /**
+     * Replaces the isolated partial wrapper's placeholder leaf while preserving unary relations
+     * inserted by preprocessing, such as LIST expansion and hidden LIST reduction projects.
+     */
+    private static Rel replaceInputPreservingUnaryChain(Rel wrapper, Rel newInput) {
+        if (wrapper instanceof Aggregate agg) {
+            return Aggregate.builder().from(agg).input(replaceInputPreservingUnaryChain(agg.getInput(), newInput)).build();
+        }
+        if (wrapper instanceof Sort sort) {
+            return Sort.builder().from(sort).input(replaceInputPreservingUnaryChain(sort.getInput(), newInput)).build();
+        }
+        if (wrapper instanceof Filter filter) {
+            return Filter.builder().from(filter).input(replaceInputPreservingUnaryChain(filter.getInput(), newInput)).build();
+        }
+        if (wrapper instanceof Project project) {
+            return Project.builder().from(project).input(replaceInputPreservingUnaryChain(project.getInput(), newInput)).build();
+        }
+        if (wrapper instanceof Fetch fetch) {
+            return Fetch.builder().from(fetch).input(replaceInputPreservingUnaryChain(fetch.getInput(), newInput)).build();
+        }
+        if (wrapper instanceof ExtensionSingle extension) {
+            return ExtensionSingle.from(extension.getDetail(), replaceInputPreservingUnaryChain(extension.getInput(), newInput)).build();
+        }
+        return newInput;
     }
 
     /** Forces {@code phase} on every measure of an Aggregate wrapper (isthmus hardcodes INITIAL_TO_RESULT). */

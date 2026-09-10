@@ -44,6 +44,7 @@ import org.opensearch.analytics.planner.rules.OpenSearchAggregateSplitRule;
 import org.opensearch.analytics.planner.rules.OpenSearchBroadcastJoinSplitRule;
 import org.opensearch.analytics.planner.rules.OpenSearchCheckedLongSumRule;
 import org.opensearch.analytics.planner.rules.OpenSearchCheckedLongSumWindowRule;
+import org.opensearch.analytics.planner.rules.OpenSearchCorrelateRule;
 import org.opensearch.analytics.planner.rules.OpenSearchDistinctCountRule;
 import org.opensearch.analytics.planner.rules.OpenSearchDistributionDeriveRule;
 import org.opensearch.analytics.planner.rules.OpenSearchFilterRule;
@@ -57,6 +58,7 @@ import org.opensearch.analytics.planner.rules.OpenSearchSortRule;
 import org.opensearch.analytics.planner.rules.OpenSearchSortSplitRule;
 import org.opensearch.analytics.planner.rules.OpenSearchTableScanRule;
 import org.opensearch.analytics.planner.rules.OpenSearchTopKRewriter;
+import org.opensearch.analytics.planner.rules.OpenSearchUncollectRule;
 import org.opensearch.analytics.planner.rules.OpenSearchUnionRule;
 import org.opensearch.analytics.planner.rules.OpenSearchUnionSplitRule;
 import org.opensearch.analytics.planner.rules.OpenSearchValuesCharNormalizeRule;
@@ -522,6 +524,8 @@ public class PlannerImpl {
                     new OpenSearchTableScanRule(context),
                     new OpenSearchFilterRule(context),
                     new OpenSearchProjectRule(context),
+                    new OpenSearchUncollectRule(context),
+                    new OpenSearchCorrelateRule(context),
                     new OpenSearchAggregateRule(context),
                     new OpenSearchJoinRule(context),
                     new OpenSearchSortRule(context),

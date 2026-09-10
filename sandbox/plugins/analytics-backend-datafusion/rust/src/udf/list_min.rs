@@ -24,10 +24,15 @@ use super::udf_identity;
 
 pub fn register_all(ctx: &SessionContext) {
     ctx.register_udf(ScalarUDF::from(ListMinUdf::new()));
+    ctx.register_udf(ScalarUDF::from(ListMaxUdf::new()));
 }
 
 pub fn udf() -> Arc<ScalarUDF> {
     Arc::new(ScalarUDF::from(ListMinUdf::new()))
+}
+
+pub fn max_udf() -> Arc<ScalarUDF> {
+    Arc::new(ScalarUDF::from(ListMaxUdf::new()))
 }
 
 pub fn expr(input: Expr) -> Expr {
@@ -100,6 +105,60 @@ impl ScalarUDFImpl for ListMinUdf {
     }
 }
 
+#[derive(Debug)]
+pub struct ListMaxUdf {
+    signature: Signature,
+}
+
+impl ListMaxUdf {
+    pub fn new() -> Self {
+        Self {
+            signature: Signature::user_defined(Volatility::Immutable),
+        }
+    }
+}
+
+udf_identity!(ListMaxUdf, "list_max");
+
+impl ScalarUDFImpl for ListMaxUdf {
+    fn name(&self) -> &str {
+        "list_max"
+    }
+
+    fn signature(&self) -> &Signature {
+        &self.signature
+    }
+
+    fn return_type(&self, arg_types: &[DataType]) -> Result<DataType> {
+        if arg_types.len() != 1 {
+            return plan_err!("list_max expects one argument, got {}", arg_types.len());
+        }
+        match &arg_types[0] {
+            DataType::List(child) => Ok(child.data_type().clone()),
+            other => plan_err!("list_max expects List<T>, got {other:?}"),
+        }
+    }
+
+    fn coerce_types(&self, arg_types: &[DataType]) -> Result<Vec<DataType>> {
+        self.return_type(arg_types)?;
+        Ok(arg_types.to_vec())
+    }
+
+    fn invoke_with_args(&self, args: ScalarFunctionArgs) -> Result<ColumnarValue> {
+        if args.args.len() != 1 {
+            return plan_err!("list_max expects one argument, got {}", args.args.len());
+        }
+        let array = args.args[0].clone().into_array(args.number_rows)?;
+        let lists = array.as_any().downcast_ref::<ListArray>().ok_or_else(|| {
+            datafusion::common::DataFusionError::Execution(format!(
+                "list_max expected ListArray, got {:?}",
+                array.data_type()
+            ))
+        })?;
+        Ok(ColumnarValue::Array(max_values(lists)?))
+    }
+}
+
 fn min_values(lists: &ListArray) -> Result<ArrayRef> {
     let values = lists.values();
     let compare = make_comparator(
@@ -130,6 +189,40 @@ fn min_values(lists: &ListArray) -> Result<ArrayRef> {
             });
         }
         indices.push(minimum.map(|index| index as u64));
+    }
+    take(values.as_ref(), &UInt64Array::from(indices), None).map_err(Into::into)
+}
+
+fn max_values(lists: &ListArray) -> Result<ArrayRef> {
+    let values = lists.values();
+    let compare = make_comparator(
+        values.as_ref(),
+        values.as_ref(),
+        SortOptions {
+            descending: false,
+            nulls_first: false,
+        },
+    )?;
+    let offsets = lists.value_offsets();
+    let mut indices = Vec::with_capacity(lists.len());
+    for row in 0..lists.len() {
+        if lists.is_null(row) {
+            indices.push(None);
+            continue;
+        }
+        let start = offsets[row] as usize;
+        let end = offsets[row + 1] as usize;
+        let mut maximum = None;
+        for index in start..end {
+            if values.is_null(index) {
+                continue;
+            }
+            maximum = Some(match maximum {
+                Some(current) if compare(current, index).is_ge() => current,
+                _ => index,
+            });
+        }
+        indices.push(maximum.map(|index| index as u64));
     }
     take(values.as_ref(), &UInt64Array::from(indices), None).map_err(Into::into)
 }
@@ -165,6 +258,34 @@ mod tests {
         assert!(result.is_null(2));
         assert!(result.is_null(3));
         assert_eq!(result.value(4), "beta");
+    }
+
+    #[test]
+    fn returns_maximum_non_null_element_per_row() {
+        let mut builder = ListBuilder::new(StringViewBuilder::new());
+        for value in [Some("z"), None, Some("alpha")] {
+            match value {
+                Some(value) => builder.values().append_value(value),
+                None => builder.values().append_null(),
+            }
+        }
+        builder.append(true);
+        builder.append(true);
+        builder.append(false);
+        builder.values().append_null();
+        builder.append(true);
+        for value in ["omega", "beta"] {
+            builder.values().append_value(value);
+        }
+        builder.append(true);
+
+        let result = max_values(&builder.finish()).unwrap();
+        let result = result.as_any().downcast_ref::<StringViewArray>().unwrap();
+        assert_eq!(result.value(0), "z");
+        assert!(result.is_null(1));
+        assert!(result.is_null(2));
+        assert!(result.is_null(3));
+        assert_eq!(result.value(4), "omega");
     }
 
     #[test]

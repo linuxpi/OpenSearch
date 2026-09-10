@@ -69,4 +69,15 @@ public class CastProjectCapabilitiesTests extends OpenSearchTestCase {
             hasScalarCapability(ScalarFunction.SAFE_CAST, FieldType.MAP)
         );
     }
+
+    public void testElementWiseFunctionsSupportArrayReturnType() {
+        for (ScalarFunction function : Set.of(
+            ScalarFunction.ARRAY_MAP_STRING,
+            ScalarFunction.ARRAY_MAP_INTEGER,
+            ScalarFunction.ARRAY_NULLIF,
+            ScalarFunction.ARRAY_COALESCE
+        )) {
+            assertTrue(function + " must be registered for ARRAY return type", hasScalarCapability(function, FieldType.ARRAY));
+        }
+    }
 }

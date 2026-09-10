@@ -37,6 +37,14 @@ final class MultiValueSortRewriter {
         return opBinding.getTypeFactory().createTypeWithNullability(component, true);
     }, null, OperandTypes.ANY, SqlFunctionCategory.USER_DEFINED_FUNCTION);
 
+    static final SqlFunction LIST_MAX_OP = new SqlFunction("list_max", SqlKind.OTHER_FUNCTION, opBinding -> {
+        var component = opBinding.getOperandType(0).getComponentType();
+        if (component == null) {
+            throw new IllegalArgumentException("list_max requires an ARRAY operand");
+        }
+        return opBinding.getTypeFactory().createTypeWithNullability(component, true);
+    }, null, OperandTypes.ANY, SqlFunctionCategory.USER_DEFINED_FUNCTION);
+
     private MultiValueSortRewriter() {}
 
     static RelNode rewrite(RelNode root) {

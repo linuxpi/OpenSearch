@@ -223,6 +223,23 @@ public class ArrowValuesTests extends OpenSearchTestCase {
         }
     }
 
+    public void testListOfStringPreservesNullElements() {
+        Field child = new Field("item", FieldType.nullable(ArrowType.Utf8.INSTANCE), null);
+        Field list = new Field("tags", FieldType.nullable(ArrowType.List.INSTANCE), List.of(child));
+        try (ListVector vector = (ListVector) list.createVector(allocator)) {
+            vector.allocateNew();
+            int start = vector.startNewValue(0);
+            VarCharVector data = (VarCharVector) vector.getDataVector();
+            data.setNull(start);
+            data.setSafe(start + 1, "blue".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            data.setValueCount(2);
+            vector.endValue(0, 2);
+            vector.setValueCount(1);
+
+            assertEquals(java.util.Arrays.asList(null, "blue"), ArrowValues.toJavaValue(vector, 0));
+        }
+    }
+
     // ---- toSourceValue / toSourceMap (moved from GetService.NativeBridgeExecutor) ----
 
     public void testToSourceValueNullReturnsNull() {

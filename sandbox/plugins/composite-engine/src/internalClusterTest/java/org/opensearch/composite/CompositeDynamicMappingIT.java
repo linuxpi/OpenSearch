@@ -273,6 +273,103 @@ public class CompositeDynamicMappingIT extends OpenSearchIntegTestCase {
         assertTrue(rows.stream().anyMatch(row -> isListColumnPlaceholder(row.get("tags"))));
     }
 
+    /**
+     * Verifies that force merge reconciles an old scalar generation and a promoted LIST generation
+     * into one canonical LIST parquet file while preserving every document.
+     */
+    public void testAdaptiveKeywordPromotionForceMergeCanonicalizesListSchema() throws Exception {
+        String indexName = "test-adaptive-force-merge";
+        CreateIndexResponse createResponse = client().admin()
+            .indices()
+            .prepareCreate(indexName)
+            .setSettings(Settings.builder().put(parquetPrimaryLuceneSecondarySettings()).put("index.refresh_interval", "-1").build())
+            .setMapping("id", "type=integer", "tags", "type=keyword")
+            .get();
+        assertTrue(createResponse.isAcknowledged());
+        ensureGreen(indexName);
+
+        assertEquals(RestStatus.CREATED, client().prepareIndex(indexName).setSource("id", 1, "tags", "solo").get().status());
+        refreshAndFlush(indexName);
+
+        assertEquals(
+            RestStatus.CREATED,
+            client().prepareIndex(indexName).setSource("id", 3, "tags", List.of("prod", "error", "prod")).get().status()
+        );
+        assertEquals(RestStatus.CREATED, client().prepareIndex(indexName).setSource("id", 4, "tags", List.of()).get().status());
+        assertBusy(() -> assertEquals(Boolean.TRUE, clusterStateFieldMapping(indexName, "tags").get("multi_value")));
+        refreshAndFlush(indexName);
+
+        assertTrue("Expected scalar and LIST generations before force merge", getSegmentCount(indexName) > 1);
+        Map<Integer, Map<String, Object>> rowsBeforeMerge = rowsById(readCurrentParquetRows(indexName));
+        assertEquals("solo", rowsBeforeMerge.get(1).get("tags"));
+        assertTrue(isListColumnPlaceholder(rowsBeforeMerge.get(3).get("tags")));
+        assertTrue(isListColumnPlaceholder(rowsBeforeMerge.get(4).get("tags")));
+
+        ensureNoActiveMerges(indexName);
+        assertEquals(1, getSegmentCount(indexName));
+
+        IndexShard shard = getIndexShard(indexName);
+        Path parquetDir = shard.shardPath().getDataPath().resolve("parquet");
+        try (GatedCloseable<List<Path>> parquetFilesRef = listParquetFiles(parquetDir, shard)) {
+            assertEquals("Force merge must produce one canonical parquet file", 1, parquetFilesRef.get().size());
+            assertEquals(3, getParquetRowCount(parquetFilesRef.get()));
+            Map<Integer, Map<String, Object>> rows = rowsById(readAllParquetRows(parquetFilesRef.get()));
+            assertTrue("Old scalar row must be promoted to LIST", isListColumnPlaceholder(rows.get(1).get("tags")));
+            assertTrue(isListColumnPlaceholder(rows.get(3).get("tags")));
+            assertTrue("Empty LIST row must survive the merge", isListColumnPlaceholder(rows.get(4).get("tags")));
+        }
+    }
+
+    /**
+     * Verifies that a sorted force merge orders mixed scalar/LIST generations by fixed MIN(tags)
+     * while retaining the canonical LIST physical type for every non-null value.
+     */
+    public void testAdaptiveKeywordPromotionSortedForceMergeUsesListMinimum() throws Exception {
+        String indexName = "test-adaptive-sorted-force-merge";
+        CreateIndexResponse createResponse = client().admin()
+            .indices()
+            .prepareCreate(indexName)
+            .setSettings(sortedByTagsSettings())
+            .setMapping("id", "type=integer", "tags", "type=keyword")
+            .get();
+        assertTrue(createResponse.isAcknowledged());
+        ensureGreen(indexName);
+
+        assertEquals(RestStatus.CREATED, client().prepareIndex(indexName).setSource("id", 1, "tags", "delta").get().status());
+        assertEquals(RestStatus.CREATED, client().prepareIndex(indexName).setSource("id", 2, "tags", "alpha").get().status());
+        refreshAndFlush(indexName);
+
+        assertEquals(RestStatus.CREATED, client().prepareIndex(indexName).setSource("id", 3, "tags", List.of("z", "beta")).get().status());
+        assertEquals(
+            RestStatus.CREATED,
+            client().prepareIndex(indexName).setSource("id", 4, "tags", List.of("omega", "charlie")).get().status()
+        );
+        assertEquals(RestStatus.CREATED, client().prepareIndex(indexName).setSource("id", 5).get().status());
+        assertBusy(() -> assertEquals(Boolean.TRUE, clusterStateFieldMapping(indexName, "tags").get("multi_value")));
+        refreshAndFlush(indexName);
+
+        assertTrue("Expected scalar and LIST generations before force merge", getSegmentCount(indexName) > 1);
+        ensureNoActiveMerges(indexName);
+        assertEquals(1, getSegmentCount(indexName));
+
+        IndexShard shard = getIndexShard(indexName);
+        Path parquetDir = shard.shardPath().getDataPath().resolve("parquet");
+        try (GatedCloseable<List<Path>> parquetFilesRef = listParquetFiles(parquetDir, shard)) {
+            assertEquals("Sorted force merge must produce one parquet file", 1, parquetFilesRef.get().size());
+            List<Map<String, Object>> rows = readAllParquetRows(parquetFilesRef.get());
+            assertEquals(5, rows.size());
+            assertEquals(
+                "Rows must be ordered by MIN(tags) ASC with missing last",
+                List.of(2, 3, 4, 1, 5),
+                rows.stream().map(row -> ((Number) row.get("id")).intValue()).toList()
+            );
+            Map<Integer, Map<String, Object>> rowsById = rowsById(rows);
+            for (int id : List.of(1, 2, 3, 4)) {
+                assertTrue("Row " + id + " must have canonical LIST storage", isListColumnPlaceholder(rowsById.get(id).get("tags")));
+            }
+        }
+    }
+
     /** Verifies that explicit SCALAR state rejects an array without publishing a mapping update. */
     public void testExplicitScalarKeywordRejectsArrayWithoutUpdatingClusterState() throws Exception {
         String indexName = "test-scalar-keyword";
@@ -351,10 +448,29 @@ public class CompositeDynamicMappingIT extends OpenSearchIntegTestCase {
 
     private List<Map<String, Object>> refreshFlushAndReadParquetRows(String indexName) throws IOException {
         refreshAndFlush(indexName);
+        return readCurrentParquetRows(indexName);
+    }
+
+    private List<Map<String, Object>> readCurrentParquetRows(String indexName) throws IOException {
         IndexShard shard = getIndexShard(indexName);
         Path parquetDir = shard.shardPath().getDataPath().resolve("parquet");
         try (GatedCloseable<List<Path>> parquetFilesRef = listParquetFiles(parquetDir, shard)) {
             return readAllParquetRows(parquetFilesRef.get());
+        }
+    }
+
+    private Map<Integer, Map<String, Object>> rowsById(List<Map<String, Object>> rows) {
+        Map<Integer, Map<String, Object>> rowsById = new HashMap<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> previous = rowsById.put(((Number) row.get("id")).intValue(), row);
+            assertNull("Duplicate row id in parquet output: " + row.get("id"), previous);
+        }
+        return rowsById;
+    }
+
+    private int getSegmentCount(String indexName) throws IOException {
+        try (GatedCloseable<CatalogSnapshot> snapshot = getIndexShard(indexName).getCatalogSnapshot()) {
+            return snapshot.get().getSegments().size();
         }
     }
 
@@ -381,6 +497,16 @@ public class CompositeDynamicMappingIT extends OpenSearchIntegTestCase {
             .put("index.pluggable.dataformat", "composite")
             .put("index.composite.primary_data_format", "parquet")
             .putList("index.composite.secondary_data_formats", "lucene")
+            .build();
+    }
+
+    private Settings sortedByTagsSettings() {
+        return Settings.builder()
+            .put(parquetPrimaryLuceneSecondarySettings())
+            .put("index.refresh_interval", "-1")
+            .putList("index.sort.field", "tags")
+            .putList("index.sort.order", "asc")
+            .putList("index.sort.missing", "_last")
             .build();
     }
 

@@ -43,6 +43,9 @@ public enum ScalarFunction {
     IS_NOT_TRUE(Category.COMPARISON, SqlKind.IS_NOT_TRUE),
     IS_NOT_FALSE(Category.COMPARISON, SqlKind.IS_NOT_FALSE),
     IN(Category.COMPARISON, SqlKind.IN),
+    ARRAY_CONTAINS(Category.COMPARISON, SqlKind.ARRAY_CONTAINS),
+    ARRAY_ANY_COMPARE(Category.COMPARISON, SqlKind.OTHER_FUNCTION),
+    ARRAY_ANY_BETWEEN(Category.COMPARISON, SqlKind.OTHER_FUNCTION),
     LIKE(Category.COMPARISON, SqlKind.LIKE),
     PREFIX(Category.COMPARISON, SqlKind.OTHER_FUNCTION),
     EARLIEST(Category.COMPARISON, SqlKind.OTHER_FUNCTION),
@@ -384,6 +387,31 @@ public enum ScalarFunction {
      * name-mapping adapter (see {@code MakeArrayAdapter} in the DataFusion backend).
      */
     ARRAY(Category.SCALAR, SqlKind.OTHER_FUNCTION),
+    /**
+     * Element-wise ARRAY string mapper — {@code array_map_string(array, fn_name, extra…)}. The
+     * frontend rewrites a scalar string function (UPPER/LOWER/TRIM/LTRIM/RTRIM/SUBSTRING/REPLACE/
+     * REVERSE) applied to an {@code ARRAY<STRING>} into this internal operator. The operator name
+     * already matches the native DataFusion UDF, so the DataFusion backend rewrites it to a local
+     * operator whose {@code FunctionMappings.Sig} binds by reference (see {@code
+     * ArrayElementWiseAdapter}). Returns {@code ARRAY<STRING>}.
+     */
+    ARRAY_MAP_STRING(Category.SCALAR, SqlKind.OTHER_FUNCTION),
+    /**
+     * Element-wise ARRAY integer mapper — {@code array_map_integer(array, fn_name, extra…)} for the
+     * integer-returning string functions (LENGTH/ASCII/POSITION/LOCATE). Returns
+     * {@code ARRAY<INTEGER>}. Same backend wiring as {@link #ARRAY_MAP_STRING}.
+     */
+    ARRAY_MAP_INTEGER(Category.SCALAR, SqlKind.OTHER_FUNCTION),
+    /**
+     * {@code NULLIF(array, scalar)} element-wise — replace every element equal to the scalar with
+     * null, preserving order and length. Backed by the {@code array_nullif} native UDF.
+     */
+    ARRAY_NULLIF(Category.SCALAR, SqlKind.OTHER_FUNCTION),
+    /**
+     * {@code COALESCE(array, scalar)} — the array when non-null, else a singleton fallback. Backed
+     * by the {@code array_coalesce} native UDF.
+     */
+    ARRAY_COALESCE(Category.SCALAR, SqlKind.OTHER_FUNCTION),
     ARRAY_LENGTH(Category.SCALAR, SqlKind.OTHER_FUNCTION),
     ARRAY_SLICE(Category.SCALAR, SqlKind.OTHER_FUNCTION),
     ARRAY_DISTINCT(Category.SCALAR, SqlKind.OTHER_FUNCTION),

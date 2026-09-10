@@ -45,7 +45,11 @@ public class MockDataFusionBackend extends MockBackend implements SearchBackEndP
     public static final String PARQUET_DATA_FORMAT = "parquet";
     private static final Set<String> DATAFUSION_FORMATS = Set.of(PARQUET_DATA_FORMAT);
 
-    private static final Set<EngineCapability> OPERATOR_CAPS = Set.of(EngineCapability.SORT, EngineCapability.VALUES);
+    private static final Set<EngineCapability> OPERATOR_CAPS = Set.of(
+        EngineCapability.SORT,
+        EngineCapability.VALUES,
+        EngineCapability.MULTI_VALUE_EXPAND
+    );
 
     private static final Set<FieldType> SUPPORTED_TYPES = new HashSet<>();
     static {

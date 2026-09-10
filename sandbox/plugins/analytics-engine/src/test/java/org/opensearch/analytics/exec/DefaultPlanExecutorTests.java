@@ -162,6 +162,21 @@ public class DefaultPlanExecutorTests extends OpenSearchTestCase {
         assertArrayEquals("columns must be reordered to [name, age]", new Object[] { "hello", 20L }, rows.get(0));
     }
 
+    public void testBatchesToRowsResolvesAggregateAliasByOrdinal() {
+        Field tagsField = new Field("tags", FieldType.nullable(new ArrowType.Utf8()), null);
+        Field countField = new Field("COUNT(*)", FieldType.nullable(new ArrowType.Int(64, true)), null);
+        VectorSchemaRoot batch = VectorSchemaRoot.create(new Schema(List.of(tagsField, countField)), allocator);
+        batch.allocateNew();
+        ((VarCharVector) batch.getVector("tags")).setSafe(0, "prod".getBytes(StandardCharsets.UTF_8));
+        ((BigIntVector) batch.getVector("COUNT(*)")).setSafe(0, 2L);
+        batch.setRowCount(1);
+
+        List<Object[]> rows = toList(DefaultPlanExecutor.batchesToRows(List.of(batch), List.of("tags", "c")));
+
+        assertEquals(1, rows.size());
+        assertArrayEquals(new Object[] { "prod", 2L }, rows.get(0));
+    }
+
     /**
      * Contract: an unknown target column name is a planner/executor invariant violation —
      * {@code orderedColumns} throws rather than dropping the column or substituting null.

@@ -39,9 +39,10 @@ use std::sync::Arc;
 
 use arrow_schema::DataType;
 
+use arrow::compute::{cast, take};
 use arrow_array::ffi::FFI_ArrowArray;
 use arrow_array::RecordBatch;
-use arrow_array::{Array, StructArray};
+use arrow_array::{Array, StructArray, UInt64Array};
 use arrow_schema::ffi::FFI_ArrowSchema;
 use arrow_schema::SchemaRef;
 use datafusion::common::DataFusionError;
@@ -1353,6 +1354,7 @@ pub unsafe fn stream_get_schema(stream_ptr: i64) -> Result<i64, DataFusionError>
 /// on the same stream.
 pub async unsafe fn stream_next(stream_ptr: i64) -> Result<i64, DataFusionError> {
     let handle = &mut *(stream_ptr as *mut QueryStreamHandle);
+    let expected_schema = handle.stream.schema();
     // Use the handle's OWN token, not a registry lookup by context_id. The
     // registry entry can be removed by a sibling stream's Drop (same id) while
     // this stream is mid-flight; a `None` token here silently degrades
@@ -1384,17 +1386,114 @@ pub async unsafe fn stream_next(stream_ptr: i64) -> Result<i64, DataFusionError>
                 ._query_tracking_context
                 .apply_pending_phantom_correction();
 
+            let batch = align_batch_to_stream_schema(batch, expected_schema)?;
             let batch = if handle.has_views {
                 compact_string_view_columns(batch)
             } else {
                 batch
             };
+            let batch = normalize_nested_variable_width_columns(batch)?;
             let struct_array: StructArray = batch.into();
             let array_data = struct_array.into_data();
             let ffi_array = FFI_ArrowArray::new(&array_data);
             Ok(Box::into_raw(Box::new(ffi_array)) as i64)
         }
         None => Ok(0),
+    }
+}
+
+/// Casts runtime batch columns to the schema advertised by the stream.
+///
+/// DataFusion operators such as UNION can choose Utf8View for runtime values while
+/// retaining List<Utf8> in the plan schema. Arrow C exports arrays and schemas through
+/// separate calls; Java imports each batch using the stream schema, so an unaligned
+/// view buffer is misread as an Utf8 offset buffer.
+fn align_batch_to_stream_schema(
+    batch: RecordBatch,
+    expected: SchemaRef,
+) -> Result<RecordBatch, DataFusionError> {
+    if batch.schema().as_ref() == expected.as_ref()
+        && batch
+            .columns()
+            .iter()
+            .zip(expected.fields().iter())
+            .all(|(column, field)| column.data_type() == field.data_type())
+    {
+        return Ok(batch);
+    }
+    if batch.num_columns() != expected.fields().len() {
+        return Err(DataFusionError::Execution(format!(
+            "stream batch width {} does not match declared schema width {}",
+            batch.num_columns(),
+            expected.fields().len()
+        )));
+    }
+    let columns = batch
+        .columns()
+        .iter()
+        .zip(expected.fields().iter())
+        .map(|(column, field)| {
+            if column.data_type() == field.data_type() {
+                Ok(Arc::clone(column))
+            } else {
+                cast(column.as_ref(), field.data_type()).map_err(DataFusionError::from)
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    RecordBatch::try_new(expected, columns).map_err(DataFusionError::from)
+}
+
+/// Re-materializes nested variable-width columns before Arrow C export.
+///
+/// DataFusion UNION/INTERLEAVE can return LIST columns whose Utf8/Binary child is a
+/// slice with a non-zero logical offset. Rust consumers accept that representation,
+/// but the Java Arrow C importer validates the child offset buffer from zero and
+/// rejects it as malformed. `take(0..len)` rebuilds canonical parent/child buffers.
+fn normalize_nested_variable_width_columns(
+    batch: RecordBatch,
+) -> Result<RecordBatch, DataFusionError> {
+    let schema = batch.schema();
+    if !schema
+        .fields()
+        .iter()
+        .any(|field| contains_nested_variable_width(field.data_type()))
+    {
+        return Ok(batch);
+    }
+    let indices = UInt64Array::from_iter_values(0..batch.num_rows() as u64);
+    let columns = batch
+        .columns()
+        .iter()
+        .zip(schema.fields().iter())
+        .map(|(column, field)| {
+            if contains_nested_variable_width(field.data_type()) {
+                take(column.as_ref(), &indices, None).map_err(DataFusionError::from)
+            } else {
+                Ok(Arc::clone(column))
+            }
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    RecordBatch::try_new(schema, columns).map_err(DataFusionError::from)
+}
+
+fn contains_nested_variable_width(data_type: &DataType) -> bool {
+    match data_type {
+        DataType::List(child) | DataType::LargeList(child) | DataType::FixedSizeList(child, _) => {
+            matches!(
+                child.data_type(),
+                DataType::Utf8
+                    | DataType::LargeUtf8
+                    | DataType::Binary
+                    | DataType::LargeBinary
+                    | DataType::Utf8View
+                    | DataType::BinaryView
+            ) || contains_nested_variable_width(child.data_type())
+        }
+        DataType::Struct(fields) => fields
+            .iter()
+            .any(|field| contains_nested_variable_width(field.data_type())),
+        DataType::Map(field, _) => contains_nested_variable_width(field.data_type()),
+        _ => false,
     }
 }
 
@@ -1698,22 +1797,14 @@ fn derive_schema_from_partial_plan(
     let physical_plan =
         futures::executor::block_on(session_state.create_physical_plan(&logical_plan))?;
 
-    // Engine-native-merge: Partial state types differ from Final output (Binary HLL sketches,
-    // or List state for sub-32-bit bitmap accumulators). Use Partial schema + Root.names so
-    // the coordinator sees the correct wire type.
+    // The coordinator consumes the shard's Partial output, not the full local Final output.
+    // This is true even when aggregate state types are primitive: grouped physical planning may
+    // order the Final output differently from the Partial state schema. Always register the
+    // Partial schema and apply Java's declared aliases positionally when available.
     if let Some(partial_schema) = crate::agg_mode::partial_aggregate_schema(&physical_plan) {
-        let has_nontrivial_state = partial_schema.fields().iter().any(|f| {
-            matches!(
-                f.data_type(),
-                arrow::datatypes::DataType::Binary | arrow::datatypes::DataType::List(_)
-            )
-        });
-        if has_nontrivial_state
-            && !declared_names.is_empty()
-            && declared_names.len() == partial_schema.fields().len()
-        {
-            use arrow::datatypes::{Field, Schema};
-            let coerced = crate::schema_coerce::coerce_inferred_schema(partial_schema);
+        use arrow::datatypes::{Field, Schema};
+        let coerced = crate::schema_coerce::coerce_inferred_schema(partial_schema);
+        if !declared_names.is_empty() && declared_names.len() == coerced.fields().len() {
             let fields: Vec<Field> = coerced
                 .fields()
                 .iter()
@@ -1728,6 +1819,7 @@ fn derive_schema_from_partial_plan(
                 coerced.metadata().clone(),
             )));
         }
+        return Ok(coerced);
     }
     Ok(crate::schema_coerce::coerce_inferred_schema(
         physical_plan.schema(),
@@ -1820,6 +1912,11 @@ fn collect_reads(rel: &substrait::proto::Rel, out: &mut Vec<substrait::proto::Re
         }
         Some(RelType::Fetch(f)) => {
             if let Some(input) = &f.input {
+                collect_reads(input, out);
+            }
+        }
+        Some(RelType::ExtensionSingle(extension)) => {
+            if let Some(input) = &extension.input {
                 collect_reads(input, out);
             }
         }
@@ -2311,6 +2408,35 @@ mod tests {
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
         predicate()
+    }
+
+    #[test]
+    fn nested_variable_width_normalization_rebuilds_sliced_list_offsets() {
+        let mut builder =
+            arrow_array::builder::ListBuilder::new(arrow_array::builder::StringBuilder::new());
+        builder.values().append_value("a");
+        builder.values().append_value("b");
+        builder.append(true);
+        builder.values().append_value("c");
+        builder.append(true);
+        builder.append(false);
+        let full = Arc::new(builder.finish()) as Arc<dyn Array>;
+        let sliced = full.slice(1, 2);
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "tags",
+            full.data_type().clone(),
+            true,
+        )]));
+        let batch = RecordBatch::try_new(schema, vec![sliced]).unwrap();
+
+        let normalized = normalize_nested_variable_width_columns(batch).unwrap();
+        let lists = normalized
+            .column(0)
+            .as_any()
+            .downcast_ref::<arrow_array::ListArray>()
+            .unwrap();
+        assert_eq!(lists.value_offsets(), &[0, 1, 1]);
+        assert_eq!(lists.values().len(), 1);
     }
 
     #[test]

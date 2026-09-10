@@ -37,6 +37,152 @@ scalar_functions:
             name: array
         return: "i64?"
 
+  - name: array_contains
+    description: >-
+      Return whether an array contains a scalar element. DataFusion exposes this
+      as an alias of its native array_has function. NULL arrays or elements
+      produce a nullable boolean result.
+    impls:
+      - args:
+          - value: "list<any1>"
+            name: array
+          - value: "any1"
+            name: element
+        return: "boolean?"
+
+  - name: array_any_compare
+    description: >-
+      Return true when any non-null string element satisfies gt, gte, lt, lte,
+      like, ilike, or regex against the supplied scalar value.
+    impls:
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: value
+          - value: "string"
+            name: operation
+        return: "boolean?"
+
+  - name: array_any_between
+    description: >-
+      Return true when any non-null string element is within inclusive bounds.
+    impls:
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: lower
+          - value: "string"
+            name: upper
+        return: "boolean?"
+
+  - name: array_map_string
+    description: >-
+      Element-wise application of a scalar string function to an ARRAY<STRING>,
+      returning ARRAY<STRING>. The second operand is a literal naming the base
+      function: upper, lower, trim, ltrim, rtrim, substring, replace, or reverse.
+      Any remaining operands are that function's extra scalar arguments (e.g.
+      substring's start/length, replace's from/to). Order and null elements are
+      preserved; an empty array yields an empty array; a null array yields a null
+      array. Backed by a custom Rust UDF on the analytics-backend-datafusion
+      plugin (no DataFusion stdlib equivalent maps a named scalar over a list).
+    impls:
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+        return: "list<string?>"
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+          - value: "i32"
+            name: start
+        return: "list<string?>"
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+          - value: "i32"
+            name: start
+          - value: "i32"
+            name: length
+        return: "list<string?>"
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+          - value: "string"
+            name: from
+          - value: "string"
+            name: to
+        return: "list<string?>"
+
+  - name: array_map_integer
+    description: >-
+      Element-wise application of an integer-returning scalar string function to
+      an ARRAY<STRING>, returning ARRAY<INTEGER>. The second operand is a literal
+      naming the base function: length, ascii, position, or locate. Order and null
+      elements are preserved; empty array → empty array; null array → null array.
+      Backed by a custom Rust UDF on the analytics-backend-datafusion plugin.
+    impls:
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+        return: "list<i32?>"
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+          - value: "string"
+            name: needle
+        return: "list<i32?>"
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: function
+          - value: "string"
+            name: needle
+          - value: "i32"
+            name: start
+        return: "list<i32?>"
+
+  - name: array_nullif
+    description: >-
+      Element-wise NULLIF(array, scalar): replace every element equal to the
+      scalar with null, preserving order and length. A null array yields a null
+      array. Backed by a custom Rust UDF on the analytics-backend-datafusion
+      plugin.
+    impls:
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: value
+        return: "list<string?>"
+
+  - name: array_coalesce
+    description: >-
+      COALESCE(array, scalar): return the array when it is non-null, otherwise a
+      singleton array containing the scalar fallback. Backed by a custom Rust UDF
+      on the analytics-backend-datafusion plugin.
+    impls:
+      - args:
+          - value: "list<string>"
+            name: array
+          - value: "string"
+            name: fallback
+        return: "list<string?>"
+
   - name: array_slice
     description: >-
       Return a sub-array slice [from, to] (1-based, inclusive on both ends).

@@ -20,6 +20,7 @@ import org.apache.calcite.sql.type.SqlTypeName;
 import org.opensearch.search.SearchService;
 import org.opensearch.search.builder.SearchSourceBuilder;
 import org.opensearch.search.sort.FieldSortBuilder;
+import org.opensearch.search.sort.ShardDocSortBuilder;
 import org.opensearch.search.sort.SortBuilder;
 import org.opensearch.search.sort.SortOrder;
 
@@ -35,12 +36,12 @@ public class SortConverter extends AbstractDslConverter {
     /** Creates a sort converter. */
     public SortConverter() {}
 
-    // Core defaults to _score DESC when no sort is specified. The analytics engine
-    // has no relevance scoring, so unsorted queries return rows in unspecified order.
-    // TODO: handle ScoreSortBuilder (_score sort)
+    // The SQL plugin injects a sole `_doc` sort when no customer ordering is requested.
+    // `_doc` is an internal Lucene scan-order token, not a mapped field in the analytics schema;
+    // DataFusion already returns unspecified natural order for an unordered query.
     @Override
     protected boolean isApplicable(ConversionContext ctx) {
-        return hasSort(ctx) || hasNonDefaultPagination(ctx);
+        return hasEffectiveSort(ctx) || hasNonDefaultPagination(ctx);
     }
 
     @Override
@@ -61,6 +62,9 @@ public class SortConverter extends AbstractDslConverter {
         List<RelFieldCollation> fieldCollations = new ArrayList<>();
 
         for (SortBuilder<?> sortBuilder : ctx.getSearchSource().sorts()) {
+            if (isInternalDocSort(sortBuilder)) {
+                continue;
+            }
             if (sortBuilder instanceof FieldSortBuilder fieldSort) {
                 String fieldName = fieldSort.getFieldName();
                 RelDataTypeField field = rowType.getField(fieldName, false, false);
@@ -105,6 +109,16 @@ public class SortConverter extends AbstractDslConverter {
 
     private static boolean hasSort(ConversionContext ctx) {
         return ctx.getSearchSource().sorts() != null && !ctx.getSearchSource().sorts().isEmpty();
+    }
+
+    private static boolean hasEffectiveSort(ConversionContext ctx) {
+        return hasSort(ctx) && ctx.getSearchSource().sorts().stream().anyMatch(sort -> !isInternalDocSort(sort));
+    }
+
+    private static boolean isInternalDocSort(SortBuilder<?> sort) {
+        return sort instanceof ShardDocSortBuilder
+            || (sort instanceof FieldSortBuilder fieldSort
+                && ("_doc".equals(fieldSort.getFieldName()) || ShardDocSortBuilder.NAME.equals(fieldSort.getFieldName())));
     }
 
     private static boolean hasNonDefaultPagination(ConversionContext ctx) {

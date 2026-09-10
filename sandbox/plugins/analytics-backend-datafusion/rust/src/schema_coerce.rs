@@ -129,7 +129,9 @@ pub fn merge_file_schemas_with_list_promotion(
                     }
                 })
                 .collect::<Vec<_>>();
-            Schema::new_with_metadata(fields, schema.metadata().clone())
+            let mut metadata = schema.metadata().clone();
+            metadata.remove("opensearch.writer_generation");
+            Schema::new_with_metadata(fields, metadata)
         })
         .collect::<Vec<_>>();
 
@@ -289,6 +291,43 @@ mod tests {
             assert_eq!(tags.data_type(), &DataType::List(Arc::clone(&child)));
             assert!(tags.is_nullable());
         }
+    }
+
+    #[test]
+    fn merge_ignores_per_file_writer_generation_metadata() {
+        let child = Arc::new(Field::new("element", DataType::Utf8, true));
+        let scalar = Schema::new_with_metadata(
+            vec![Field::new("tags", DataType::Utf8, true)],
+            HashMap::from([
+                ("opensearch.writer_generation".to_string(), "1".to_string()),
+                (
+                    "opensearch.format_version".to_string(),
+                    "1.0.0.0".to_string(),
+                ),
+            ]),
+        );
+        let list = Schema::new_with_metadata(
+            vec![Field::new("tags", DataType::List(child), true)],
+            HashMap::from([
+                ("opensearch.writer_generation".to_string(), "2".to_string()),
+                (
+                    "opensearch.format_version".to_string(),
+                    "1.0.0.0".to_string(),
+                ),
+            ]),
+        );
+
+        let merged = merge_file_schemas_with_list_promotion(vec![scalar, list]).unwrap();
+        assert!(!merged
+            .metadata()
+            .contains_key("opensearch.writer_generation"));
+        assert_eq!(
+            merged
+                .metadata()
+                .get("opensearch.format_version")
+                .map(String::as_str),
+            Some("1.0.0.0")
+        );
     }
 
     #[test]

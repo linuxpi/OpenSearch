@@ -92,9 +92,11 @@ public class DataFusionFragmentConvertorTests extends OpenSearchTestCase {
             SimpleExtension.ExtensionCollection delegationExtensions = SimpleExtension.load(List.of("/delegation_functions.yaml"));
             SimpleExtension.ExtensionCollection aggregateExtensions = SimpleExtension.load(List.of("/opensearch_aggregate_functions.yaml"));
             SimpleExtension.ExtensionCollection scalarExtensions = SimpleExtension.load(List.of("/opensearch_scalar_functions.yaml"));
+            SimpleExtension.ExtensionCollection arrayExtensions = SimpleExtension.load(List.of("/opensearch_array_functions.yaml"));
             extensions = DefaultExtensionCatalog.DEFAULT_COLLECTION.merge(delegationExtensions)
                 .merge(aggregateExtensions)
-                .merge(scalarExtensions);
+                .merge(scalarExtensions)
+                .merge(arrayExtensions);
         } finally {
             t.setContextClassLoader(prev);
         }
@@ -192,6 +194,115 @@ public class DataFusionFragmentConvertorTests extends OpenSearchTestCase {
         Rel inner = filterRel.getInput();
         assertTrue("Filter input must be a ReadRel", inner.hasRead());
         assertEquals(List.of("test_index"), inner.getRead().getNamedTable().getNamesList());
+    }
+
+    public void testConvertShardScanFragment_ArrayContainsFilter() throws Exception {
+        RelNode scan = buildListTableScan("test_index");
+        RelDataType componentType = scan.getRowType().getFieldList().get(0).getType().getComponentType();
+        RexNode predicate = rexBuilder.makeCall(
+            org.apache.calcite.sql.fun.SqlLibraryOperators.ARRAY_CONTAINS,
+            rexBuilder.makeInputRef(scan, 0),
+            rexBuilder.makeCast(componentType, rexBuilder.makeLiteral("prod"))
+        );
+        RelNode filter = LogicalFilter.create(scan, predicate);
+
+        Plan plan = decodeSubstrait(newConvertor().convertFragment(filter));
+        assertTrue(rootRel(plan).hasFilter());
+        assertTrue(
+            "ARRAY_CONTAINS must bind to DataFusion array_contains",
+            plan.getExtensionsList()
+                .stream()
+                .filter(SimpleExtensionDeclaration::hasExtensionFunction)
+                .map(declaration -> declaration.getExtensionFunction().getName())
+                .map(name -> name.contains(":") ? name.substring(0, name.indexOf(':')) : name)
+                .anyMatch("array_contains"::equals)
+        );
+    }
+
+    public void testConvertShardScanFragment_ArrayNativePredicateFilters() throws Exception {
+        RelNode scan = buildListTableScan("test_index");
+        RelDataType componentType = scan.getRowType().getFieldList().get(0).getType().getComponentType();
+        RexNode array = rexBuilder.makeInputRef(scan, 0);
+        RexNode value = rexBuilder.makeCast(componentType, rexBuilder.makeLiteral("blue"));
+        RexNode compare = rexBuilder.makeCall(ArrayAnyPredicateAdapter.LOCAL_ARRAY_ANY_COMPARE, array, value, rexBuilder.makeLiteral("gt"));
+        RexNode between = rexBuilder.makeCall(
+            ArrayAnyPredicateAdapter.LOCAL_ARRAY_ANY_BETWEEN,
+            array,
+            rexBuilder.makeCast(componentType, rexBuilder.makeLiteral("a")),
+            rexBuilder.makeCast(componentType, rexBuilder.makeLiteral("q"))
+        );
+
+        assertFilterPlanContainsFunction(LogicalFilter.create(scan, compare), "array_any_compare");
+        assertFilterPlanContainsFunction(LogicalFilter.create(scan, between), "array_any_between");
+    }
+
+    private void assertFilterPlanContainsFunction(RelNode node, String expectedFunction) throws Exception {
+        Plan plan = decodeSubstrait(newConvertor().convertFragment(node));
+        assertTrue(rootRel(plan).hasFilter());
+        assertTrue(
+            "expected Substrait function " + expectedFunction,
+            plan.getExtensionsList()
+                .stream()
+                .filter(SimpleExtensionDeclaration::hasExtensionFunction)
+                .map(declaration -> declaration.getExtensionFunction().getName())
+                .map(name -> name.contains(":") ? name.substring(0, name.indexOf(':')) : name)
+                .anyMatch(expectedFunction::equals)
+        );
+    }
+
+    public void testConvertShardScanFragment_ArrayElementWiseProjections() throws Exception {
+        RelNode scan = buildListTableScan("test_index");
+        RelDataType componentType = scan.getRowType().getFieldList().get(0).getType().getComponentType();
+        RexNode array = rexBuilder.makeInputRef(scan, 0);
+
+        RexNode mapString = rexBuilder.makeCall(ArrayElementWiseAdapter.LOCAL_ARRAY_MAP_STRING, array, rexBuilder.makeLiteral("upper"));
+        RexNode mapInteger = rexBuilder.makeCall(ArrayElementWiseAdapter.LOCAL_ARRAY_MAP_INTEGER, array, rexBuilder.makeLiteral("length"));
+        RelDataType intType = typeFactory.createSqlType(SqlTypeName.INTEGER);
+        RexNode substring = rexBuilder.makeCall(
+            ArrayElementWiseAdapter.LOCAL_ARRAY_MAP_STRING,
+            array,
+            rexBuilder.makeLiteral("substring"),
+            rexBuilder.makeLiteral(1, intType, false),
+            rexBuilder.makeLiteral(3, intType, false)
+        );
+        RexNode locate = rexBuilder.makeCall(
+            ArrayElementWiseAdapter.LOCAL_ARRAY_MAP_INTEGER,
+            array,
+            rexBuilder.makeLiteral("locate"),
+            rexBuilder.makeLiteral("o"),
+            rexBuilder.makeLiteral(3, intType, false)
+        );
+        RexNode nullif = rexBuilder.makeCall(
+            ArrayElementWiseAdapter.LOCAL_ARRAY_NULLIF,
+            array,
+            rexBuilder.makeCast(componentType, rexBuilder.makeLiteral("blue"))
+        );
+        RexNode coalesce = rexBuilder.makeCall(
+            ArrayElementWiseAdapter.LOCAL_ARRAY_COALESCE,
+            array,
+            rexBuilder.makeCast(componentType, rexBuilder.makeLiteral("fallback"))
+        );
+
+        assertProjectPlanContainsFunction(LogicalProject.create(scan, List.of(), List.of(mapString), List.of("up")), "array_map_string");
+        assertProjectPlanContainsFunction(LogicalProject.create(scan, List.of(), List.of(mapInteger), List.of("len")), "array_map_integer");
+        assertProjectPlanContainsFunction(LogicalProject.create(scan, List.of(), List.of(substring), List.of("sub")), "array_map_string");
+        assertProjectPlanContainsFunction(LogicalProject.create(scan, List.of(), List.of(locate), List.of("loc")), "array_map_integer");
+        assertProjectPlanContainsFunction(LogicalProject.create(scan, List.of(), List.of(nullif), List.of("nz")), "array_nullif");
+        assertProjectPlanContainsFunction(LogicalProject.create(scan, List.of(), List.of(coalesce), List.of("cz")), "array_coalesce");
+    }
+
+    private void assertProjectPlanContainsFunction(RelNode node, String expectedFunction) throws Exception {
+        Plan plan = decodeSubstrait(newConvertor().convertFragment(node));
+        assertTrue(rootRel(plan).hasProject());
+        assertTrue(
+            "expected Substrait function " + expectedFunction,
+            plan.getExtensionsList()
+                .stream()
+                .filter(SimpleExtensionDeclaration::hasExtensionFunction)
+                .map(declaration -> declaration.getExtensionFunction().getName())
+                .map(name -> name.contains(":") ? name.substring(0, name.indexOf(':')) : name)
+                .anyMatch(expectedFunction::equals)
+        );
     }
 
     /**
@@ -384,6 +495,78 @@ public class DataFusionFragmentConvertorTests extends OpenSearchTestCase {
                 .map(name -> name.contains(":") ? name.substring(0, name.indexOf(':')) : name)
                 .anyMatch("list_min"::equals)
         );
+    }
+
+    public void testListMinMaxAggregatesUseHiddenScalarReductions() throws Exception {
+        RelNode scan = buildListTableScan("list_aggregate_test");
+        RelDataType listType = scan.getRowType().getFieldList().get(0).getType();
+        AggregateCall minCall = AggregateCall.create(
+            SqlStdOperatorTable.MIN,
+            false,
+            false,
+            false,
+            List.of(),
+            List.of(0),
+            -1,
+            null,
+            RelCollations.EMPTY,
+            0,
+            scan,
+            listType,
+            "min_tags"
+        );
+        AggregateCall maxCall = AggregateCall.create(
+            SqlStdOperatorTable.MAX,
+            false,
+            false,
+            false,
+            List.of(),
+            List.of(0),
+            -1,
+            null,
+            RelCollations.EMPTY,
+            0,
+            scan,
+            listType,
+            "max_tags"
+        );
+        LogicalAggregate aggregate = LogicalAggregate.create(scan, List.of(), ImmutableBitSet.of(), null, List.of(minCall, maxCall));
+
+        Plan plan = decodeSubstrait(newConvertor().convertFragment(aggregate));
+        List<String> functions = plan.getExtensionsList()
+            .stream()
+            .filter(SimpleExtensionDeclaration::hasExtensionFunction)
+            .map(declaration -> declaration.getExtensionFunction().getName())
+            .map(name -> name.contains(":") ? name.substring(0, name.indexOf(':')) : name)
+            .toList();
+        assertTrue("MIN(ARRAY) must derive a scalar list_min key", functions.contains("list_min"));
+        assertTrue("MAX(ARRAY) must derive a scalar list_max key", functions.contains("list_max"));
+        Rel root = rootRel(plan);
+        assertTrue(root.hasAggregate());
+        assertTrue("aggregate input must project hidden scalar reduction keys", root.getAggregate().getInput().hasProject());
+    }
+
+    public void testListApproxCountDistinctUsesListAwareExactUdaf() throws Exception {
+        RelNode scan = buildListTableScan("list_distinct_test");
+        AggregateCall call = AggregateCall.create(
+            SqlStdOperatorTable.APPROX_COUNT_DISTINCT,
+            false,
+            List.of(0),
+            -1,
+            typeFactory.createSqlType(SqlTypeName.BIGINT),
+            "distinct_tags"
+        );
+        LogicalAggregate aggregate = LogicalAggregate.create(scan, List.of(), ImmutableBitSet.of(), null, List.of(call));
+
+        Plan plan = decodeSubstrait(newConvertor().convertFragment(aggregate));
+        List<String> functions = plan.getExtensionsList()
+            .stream()
+            .filter(SimpleExtensionDeclaration::hasExtensionFunction)
+            .map(declaration -> declaration.getExtensionFunction().getName())
+            .map(name -> name.contains(":") ? name.substring(0, name.indexOf(':')) : name)
+            .toList();
+        assertTrue("COUNT DISTINCT over ARRAY must use the list-aware exact UDAF", functions.contains("os_count_distinct"));
+        assertFalse("DataFusion approx_distinct does not accept List values", functions.contains("approx_distinct"));
     }
 
     /**
@@ -593,6 +776,14 @@ public class DataFusionFragmentConvertorTests extends OpenSearchTestCase {
         byte[] combinedBytes = convertor.attachFragmentOnTop(sort, aggBytes);
 
         Plan plan = decodeSubstrait(combinedBytes);
+        Rel root = rootRel(plan);
+        assertTrue("top-level wrapper must be the user Sort", root.hasSort());
+        Rel aggregateRel = root.getSort().getInput();
+        assertTrue("Sort must contain exactly the attached Aggregate", aggregateRel.hasAggregate());
+        assertTrue(
+            "attached Aggregate must consume the original Union directly, without a duplicated Aggregate",
+            aggregateRel.getAggregate().getInput().hasSet()
+        );
         List<String> rootNames = plan.getRelations(0).getRoot().getNamesList();
         assertEquals(
             "Plan.Root.names must reflect the Sort wrapper's output (= aggregate's 1-column output), "
@@ -783,6 +974,88 @@ public class DataFusionFragmentConvertorTests extends OpenSearchTestCase {
         assertEquals(-1, payload.getInt());
         assertEquals("implicit GROUP BY expansion replaces the LIST field", 0, payload.getInt());
         assertEquals("implicit GROUP BY expansion de-duplicates within each document", 1, payload.getInt());
+    }
+
+    public void testAttachPartialListGroupByPreservesExpansion() throws Exception {
+        RelNode scan = buildListTableScan("test_index");
+        RelNode project = LogicalProject.create(scan, List.of(), List.of(rexBuilder.makeInputRef(scan, 0)), List.of("tags"));
+        AggregateCall count = AggregateCall.create(
+            SqlStdOperatorTable.COUNT,
+            false,
+            List.of(),
+            -1,
+            typeFactory.createSqlType(SqlTypeName.BIGINT),
+            "count"
+        );
+        LogicalAggregate aggregate = LogicalAggregate.create(project, List.of(), ImmutableBitSet.of(0), null, List.of(count));
+
+        DataFusionFragmentConvertor convertor = newConvertor();
+        byte[] innerBytes = convertor.convertFragment(project);
+        byte[] partialBytes = convertor.attachPartialAggOnTop(aggregate, innerBytes);
+        Rel root = rootRel(decodeSubstrait(partialBytes));
+
+        assertTrue(root.hasAggregate());
+        Rel expanded = root.getAggregate().getInput();
+        assertTrue("partial LIST GROUP BY must preserve its ExtensionSingleRel", expanded.hasExtensionSingle());
+        assertEquals("opensearch://analytics/multi_value_expand/v1", expanded.getExtensionSingle().getDetail().getTypeUrl());
+        Rel expandedInput = expanded.getExtensionSingle().getInput();
+        assertTrue("the preserved expansion must retain the converted child project", expandedInput.hasProject());
+        assertTrue("partial attachment must not duplicate the converted child project", expandedInput.getProject().getInput().hasRead());
+    }
+
+    public void testFinalStageListGroupByUsesScalarStageInput() throws Exception {
+        RelDataType listType = buildListTableScan("source").getRowType().getFieldList().get(0).getType();
+        RelDataType stageType = typeFactory.builder()
+            .add("tags", listType)
+            .add("count", typeFactory.createSqlType(SqlTypeName.BIGINT))
+            .build();
+        RelNode scan = new DataFusionFragmentConvertor.StageInputTableScan(cluster, cluster.traitSet(), "input-7", stageType);
+        AggregateCall sum = AggregateCall.create(
+            SqlStdOperatorTable.SUM,
+            false,
+            List.of(1),
+            -1,
+            typeFactory.createSqlType(SqlTypeName.BIGINT),
+            "count"
+        );
+        LogicalAggregate aggregate = LogicalAggregate.create(scan, List.of(), ImmutableBitSet.of(0), null, List.of(sum));
+
+        Rel root = rootRel(decodeSubstrait(newConvertor().convertFragment(aggregate)));
+        assertTrue(root.hasAggregate());
+        Rel input = root.getAggregate().getInput();
+        assertTrue("FINAL LIST GROUP BY must read scalar partial keys directly", input.hasRead());
+        assertTrue("FINAL stage key schema must be STRING", input.getRead().getBaseSchema().getStruct().getTypes(0).hasString());
+        Expression finalCountArg = root.getAggregate().getMeasures(0).getMeasure().getArguments(0).getValue();
+        assertTrue(finalCountArg.hasSelection());
+        assertEquals(
+            "FINAL COUNT must merge the partial count column, not the group key",
+            1,
+            finalCountArg.getSelection().getDirectReference().getStructField().getField()
+        );
+    }
+
+    public void testListGroupByRetypesParentProjection() throws Exception {
+        RelNode scan = buildListTableScan("test_index");
+        AggregateCall count = AggregateCall.create(
+            SqlStdOperatorTable.COUNT,
+            false,
+            List.of(),
+            -1,
+            typeFactory.createSqlType(SqlTypeName.BIGINT),
+            "count"
+        );
+        LogicalAggregate aggregate = LogicalAggregate.create(scan, List.of(), ImmutableBitSet.of(0), null, List.of(count));
+        LogicalProject project = LogicalProject.create(
+            aggregate,
+            List.of(),
+            List.of(rexBuilder.makeInputRef(aggregate, 0), rexBuilder.makeInputRef(aggregate, 1)),
+            List.of("tags", "count")
+        );
+
+        Rel root = rootRel(decodeSubstrait(newConvertor().convertFragment(project)));
+        assertTrue(root.hasProject());
+        assertTrue(root.getProject().getInput().hasAggregate());
+        assertTrue(root.getProject().getInput().getAggregate().getInput().hasExtensionSingle());
     }
 
     public void testExplicitMvExpandCorrelateEmitsAppendExtensionWithLimit() throws Exception {

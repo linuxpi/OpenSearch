@@ -16,6 +16,7 @@ import org.apache.calcite.rel.logical.LogicalTableScan;
 import org.apache.calcite.rex.RexLiteral;
 import org.opensearch.dsl.TestUtils;
 import org.opensearch.search.builder.SearchSourceBuilder;
+import org.opensearch.search.sort.SortBuilders;
 import org.opensearch.search.sort.SortOrder;
 import org.opensearch.test.OpenSearchTestCase;
 
@@ -29,6 +30,21 @@ public class SortConverterTests extends OpenSearchTestCase {
         RelNode result = converter.convert(scan, ctx);
 
         assertSame(scan, result);
+    }
+
+    public void testSkipsShardDocSort() throws ConversionException {
+        ConversionContext ctx = TestUtils.createContext(new SearchSourceBuilder().sort(SortBuilders.shardDocSort()));
+
+        assertSame(scan, converter.convert(scan, ctx));
+    }
+
+    public void testShardDocSortDoesNotHideMappedSort() throws ConversionException {
+        SearchSourceBuilder source = new SearchSourceBuilder().sort(SortBuilders.shardDocSort()).sort("price", SortOrder.DESC);
+        ConversionContext ctx = TestUtils.createContext(source);
+
+        LogicalSort sort = (LogicalSort) converter.convert(scan, ctx);
+        assertEquals(1, sort.getCollation().getFieldCollations().size());
+        assertEquals(1, sort.getCollation().getFieldCollations().get(0).getFieldIndex());
     }
 
     public void testSortDescending() throws ConversionException {

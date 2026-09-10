@@ -208,8 +208,21 @@ impl LocalSession {
             "DataFusion logical plan:\n{}",
             logical_plan.display_indent()
         );
-        let dataframe = self.ctx.execute_logical_plan(logical_plan).await?;
-        let physical_plan = dataframe.create_physical_plan().await?;
+        // The Substrait consumer has already resolved field references and function types.
+        // Re-entering execute_logical_plan runs the analyzer a second time; for grouped FINAL
+        // aggregates DataFusion 54 can reorder aggregate states ahead of group keys while retaining
+        // the original SUM ordinal, causing SUM to bind to the string key. Plan the resolved tree
+        // directly, matching derive_schema_from_partial_plan.
+        let physical_plan = self.ctx.state().create_physical_plan(&logical_plan).await?;
+        // Shards already produced the PARTIAL aggregate rows registered as this session's inputs.
+        // DataFusion's Substrait consumer ignores AggregationPhase and physical planning therefore
+        // creates another Partial/Final pair. Keep only the Final half so its field ordinals bind
+        // directly to the registered partial-state schema, matching prepare_final_plan.
+        let physical_plan = crate::agg_mode::apply_aggregate_mode(
+            physical_plan,
+            crate::agg_mode::Mode::Final,
+            false,
+        )?;
 
         let target_schema = crate::schema_coerce::coerce_inferred_schema(physical_plan.schema());
         let physical_plan =
@@ -250,8 +263,12 @@ impl LocalSession {
         })?;
         let logical_plan =
             crate::substrait_consumer::from_substrait_plan(&self.ctx.state(), &plan).await?;
-        let dataframe = self.ctx.execute_logical_plan(logical_plan).await?;
-        let physical_plan = dataframe.create_physical_plan().await?;
+        // The Substrait consumer has already resolved field references and function types.
+        // Re-entering execute_logical_plan runs the analyzer a second time; for grouped FINAL
+        // aggregates DataFusion 54 can reorder aggregate states ahead of group keys while retaining
+        // the original SUM ordinal, causing SUM to bind to the string key. Plan the resolved tree
+        // directly, matching derive_schema_from_partial_plan.
+        let physical_plan = self.ctx.state().create_physical_plan(&logical_plan).await?;
         // Strip first so `force_aggregate_mode(Final)` can find the Final/Partial pair
         // through the raw plan; then derive `target_schema` and wrap with RelabelExec from
         // the stripped output (otherwise the relabel target would carry the pre-strip Final
@@ -413,6 +430,69 @@ mod tests {
         }
         producer.join().expect("producer thread");
         assert_eq!(total, 45);
+    }
+
+    #[tokio::test]
+    async fn execute_substrait_grouped_sum_uses_numeric_state_column() {
+        let env = test_runtime_env();
+        let mut session = LocalSession::new(&env);
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("tags", DataType::Utf8, false),
+            Field::new("c", DataType::Int64, false),
+        ]));
+        let batch = RecordBatch::try_new(
+            Arc::clone(&schema),
+            vec![
+                Arc::new(StringArray::from(vec!["a", "a", "b"])),
+                Arc::new(Int64Array::from(vec![1, 2, 4])),
+            ],
+        )
+        .expect("grouped partial batch builds");
+        session
+            .register_memtable("input-0", Arc::clone(&schema), vec![batch])
+            .expect("register grouped partial input");
+
+        let substrait_bytes = {
+            let env = test_runtime_env();
+            let mut producer = LocalSession::new(&env);
+            producer
+                .register_memtable("input-0", Arc::clone(&schema), vec![])
+                .expect("producer register");
+            let df = producer
+                .ctx
+                .sql("SELECT tags, SUM(c) AS c FROM \"input-0\" GROUP BY tags")
+                .await
+                .expect("grouped sum parses");
+            let substrait =
+                to_substrait_plan(df.logical_plan(), &producer.ctx.state()).expect("to_substrait");
+            let mut buf = Vec::new();
+            substrait.encode(&mut buf).expect("encode");
+            buf
+        };
+
+        let (mut stream, _plan) = session
+            .execute_substrait(&substrait_bytes)
+            .await
+            .expect("grouped final aggregate plans");
+        let mut rows = Vec::new();
+        while let Some(batch) = stream.next().await {
+            let batch = batch.expect("batch ok");
+            let tags = batch
+                .column(0)
+                .as_any()
+                .downcast_ref::<StringArray>()
+                .expect("tags string");
+            let counts = batch
+                .column(1)
+                .as_any()
+                .downcast_ref::<Int64Array>()
+                .expect("counts i64");
+            for row in 0..batch.num_rows() {
+                rows.push((tags.value(row).to_string(), counts.value(row)));
+            }
+        }
+        rows.sort();
+        assert_eq!(rows, vec![("a".to_string(), 3), ("b".to_string(), 4)]);
     }
 
     #[tokio::test]

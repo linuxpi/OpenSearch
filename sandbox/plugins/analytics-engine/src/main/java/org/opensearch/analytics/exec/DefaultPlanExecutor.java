@@ -988,10 +988,26 @@ public class DefaultPlanExecutor extends HandledTransportAction<AnalyticsQueryRe
         if (targetColumnOrder == null || targetColumnOrder.isEmpty()) {
             return batch.getFieldVectors();
         }
+        List<FieldVector> physical = batch.getFieldVectors();
         List<FieldVector> ordered = new ArrayList<>(targetColumnOrder.size());
-        for (String name : targetColumnOrder) {
+        java.util.Set<Integer> claimed = new java.util.HashSet<>();
+        java.util.Set<String> targetNames = new java.util.HashSet<>(targetColumnOrder);
+        for (int targetIndex = 0; targetIndex < targetColumnOrder.size(); targetIndex++) {
+            String name = targetColumnOrder.get(targetIndex);
             FieldVector vector = batch.getVector(name);
-            if (vector == null) {
+            int physicalIndex = vector == null ? -1 : physical.indexOf(vector);
+            if (vector == null
+                && physical.size() == targetColumnOrder.size()
+                && targetIndex < physical.size()
+                && claimed.contains(targetIndex) == false
+                && targetNames.contains(physical.get(targetIndex).getName()) == false) {
+                // Substrait/DataFusion preserves aggregate output order but does not preserve
+                // Calcite aliases (for example `COUNT(*) AS c` arrives as `COUNT(*)`). Use the
+                // same ordinal only when it cannot steal another explicitly requested column.
+                vector = physical.get(targetIndex);
+                physicalIndex = targetIndex;
+            }
+            if (vector == null || claimed.add(physicalIndex) == false) {
                 throw new IllegalStateException(
                     "Column [" + name + "] expected by plan row type not found in batch schema: " + batch.getSchema().getFields()
                 );

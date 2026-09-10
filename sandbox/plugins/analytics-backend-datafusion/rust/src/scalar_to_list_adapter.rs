@@ -10,8 +10,9 @@ use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use datafusion::arrow::array::{ListArray, RecordBatch};
+use datafusion::arrow::array::{Array, ListArray, RecordBatch, UInt64Array};
 use datafusion::arrow::buffer::OffsetBuffer;
+use datafusion::arrow::compute::take;
 use datafusion::arrow::datatypes::{DataType, Field, FieldRef, Schema, SchemaRef};
 use datafusion::common::tree_node::{Transformed, TransformedResult, TreeNode};
 use datafusion::common::Result;
@@ -148,12 +149,29 @@ impl PhysicalExpr for ScalarToListExpr {
         } else {
             datafusion::arrow::compute::cast(physical_values.as_ref(), self.child.data_type())?
         };
-        let offsets = OffsetBuffer::new((0..=batch.num_rows() as i32).collect::<Vec<_>>().into());
         let nulls = values.nulls().cloned();
+        let (offsets, list_values) = if values.null_count() == 0 {
+            (
+                OffsetBuffer::new((0..=batch.num_rows() as i32).collect::<Vec<_>>().into()),
+                values,
+            )
+        } else {
+            let mut child_indices = Vec::with_capacity(batch.num_rows() - values.null_count());
+            let mut offsets = Vec::with_capacity(batch.num_rows() + 1);
+            offsets.push(0i32);
+            for row in 0..batch.num_rows() {
+                if values.is_valid(row) {
+                    child_indices.push(row as u64);
+                }
+                offsets.push(child_indices.len() as i32);
+            }
+            let compact = take(values.as_ref(), &UInt64Array::from(child_indices), None)?;
+            (OffsetBuffer::new(offsets.into()), compact)
+        };
         Ok(ColumnarValue::Array(Arc::new(ListArray::new(
             Arc::clone(&self.child),
             offsets,
-            values,
+            list_values,
             nulls,
         ))))
     }
@@ -248,6 +266,8 @@ mod tests {
         let first = first.as_any().downcast_ref::<StringArray>().unwrap();
         assert_eq!(first.value(0), "prod");
         assert!(lists.is_null(1));
+        assert_eq!(lists.value_offsets(), &[0, 1, 1]);
+        assert_eq!(lists.values().len(), 1);
     }
 
     #[test]

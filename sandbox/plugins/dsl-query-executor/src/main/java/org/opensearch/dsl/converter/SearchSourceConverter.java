@@ -147,11 +147,14 @@ public class SearchSourceConverter {
 
         QueryPlans.Builder builder = new QueryPlans.Builder();
 
-        // Hits path: Scan → Filter → Project → Sort
+        // Hits path: Scan → Filter → Sort → Project. Sort must run before source
+        // projection because OpenSearch permits sorting by fields that are not returned.
+        // Projecting first drops those fields from the row type and makes SortConverter
+        // fail with "Sort field '<field>' not found in schema".
         // size=0 skips hits — total doc count comes from analytics plugin metadata
         if (size > 0) {
-            RelNode hits = projectConverter.convert(base, ctx);
-            hits = sortConverter.convert(hits, ctx);
+            RelNode hits = sortConverter.convert(base, ctx);
+            hits = projectConverter.convert(hits, ctx);
             builder.add(new QueryPlans.QueryPlan(QueryPlans.Type.HITS, hits));
         }
 

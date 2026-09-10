@@ -78,6 +78,39 @@ public class SearchSourceConverterTests extends OpenSearchTestCase {
         assertTrue(plan.relNode() instanceof LogicalTableScan);
     }
 
+    public void testDefaultDocSortDoesNotRequireMappedField() throws ConversionException {
+        QueryPlans plans = converter.convert(new SearchSourceBuilder().sort("_doc"), "test-index");
+
+        QueryPlans.QueryPlan hits = plans.get(QueryPlans.Type.HITS).get(0);
+        assertTrue("sole _doc sort must preserve the unordered scan", hits.relNode() instanceof LogicalTableScan);
+    }
+
+    public void testDefaultDocSortDoesNotHideMappedSort() throws ConversionException {
+        SearchSourceBuilder source = new SearchSourceBuilder().sort("_doc").sort("price");
+
+        RelNode hits = converter.convert(source, "test-index").get(QueryPlans.Type.HITS).get(0).relNode();
+
+        assertTrue(hits instanceof LogicalSort);
+        LogicalSort sort = (LogicalSort) hits;
+        assertEquals(1, sort.getCollation().getFieldCollations().size());
+        assertEquals(1, sort.getCollation().getFieldCollations().get(0).getFieldIndex());
+    }
+
+    public void testSortFieldMayBeExcludedFromSourceProjection() throws ConversionException {
+        SearchSourceBuilder source = new SearchSourceBuilder().fetchSource(new String[] { "name" }, null).sort("price");
+
+        RelNode hits = converter.convert(source, "test-index").get(QueryPlans.Type.HITS).get(0).relNode();
+
+        assertTrue(
+            "source filtering must remain the outer operation: " + hits.explain(),
+            hits instanceof org.apache.calcite.rel.logical.LogicalProject
+        );
+        RelNode sort = hits.getInput(0);
+        assertTrue("sort must execute while the unprojected price field is available: " + hits.explain(), sort instanceof LogicalSort);
+        assertEquals(List.of("name"), hits.getRowType().getFieldNames());
+        assertEquals("price", sort.getRowType().getFieldList().get(1).getName());
+    }
+
     public void testConvertResolvesFieldNames() throws ConversionException {
         QueryPlans plans = converter.convert(new SearchSourceBuilder(), "test-index");
 

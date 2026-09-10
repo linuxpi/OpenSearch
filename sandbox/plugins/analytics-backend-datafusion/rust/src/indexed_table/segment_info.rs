@@ -29,6 +29,7 @@ use datafusion::catalog::Session;
 use datafusion::common::ScalarValue;
 use datafusion::execution::cache::cache_manager::FileMetadataCache;
 use datafusion::parquet::arrow::arrow_reader::statistics::StatisticsConverter;
+use datafusion::datasource::file_format::FileFormat;
 
 /// Parquet footer kv key under which the writer stamps the writer generation.
 /// Must match `parquet-data-format`'s `WRITER_GENERATION_KEY`.
@@ -138,6 +139,7 @@ pub async fn build_segments(
 
     // Merge per-file schemas deterministically. Compatible scalar/LIST pairs are promoted to
     // LIST, while all other incompatible same-name type changes remain fail-fast.
+    FileFormat::infer_schema
     let mut segment_schemas = segments
         .iter()
         .map(|segment| {

@@ -120,6 +120,8 @@ pub(crate) fn coerce_args(
         .collect()
 }
 
+pub mod array_any;
+pub mod array_elementwise;
 pub mod binary_to_base64;
 pub mod conv;
 pub mod conversion;
@@ -175,6 +177,8 @@ pub mod width_bucket;
 // `./gradlew :sandbox:libs:dataformat-native:buildRustLibrary --rerun-tasks`
 // and restart the OpenSearch JVM (the loaded dylib is JVM-cached).
 pub fn register_all(ctx: &SessionContext) {
+    array_any::register_all(ctx);
+    array_elementwise::register_all(ctx);
     binary_to_base64::register_all(ctx);
     conv::register_all(ctx);
     convert_tz::register_all(ctx);

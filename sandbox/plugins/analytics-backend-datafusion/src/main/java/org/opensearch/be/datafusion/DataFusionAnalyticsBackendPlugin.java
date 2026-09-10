@@ -80,7 +80,12 @@ public class DataFusionAnalyticsBackendPlugin implements AnalyticsSearchBackendP
 
     private static final Logger LOGGER = LogManager.getLogger(DataFusionAnalyticsBackendPlugin.class);
 
-    private static final Set<EngineCapability> ENGINE_CAPS = Set.of(EngineCapability.SORT, EngineCapability.UNION, EngineCapability.VALUES);
+    private static final Set<EngineCapability> ENGINE_CAPS = Set.of(
+        EngineCapability.SORT,
+        EngineCapability.UNION,
+        EngineCapability.VALUES,
+        EngineCapability.MULTI_VALUE_EXPAND
+    );
 
     private static final Set<FieldType> SUPPORTED_FIELD_TYPES = new HashSet<>();
     static {
@@ -113,6 +118,9 @@ public class DataFusionAnalyticsBackendPlugin implements AnalyticsSearchBackendP
         ScalarFunction.IS_NOT_TRUE,
         ScalarFunction.IS_NOT_FALSE,
         ScalarFunction.IN,
+        ScalarFunction.ARRAY_CONTAINS,
+        ScalarFunction.ARRAY_ANY_COMPARE,
+        ScalarFunction.ARRAY_ANY_BETWEEN,
         ScalarFunction.LIKE,
         ScalarFunction.REGEXP_CONTAINS,
         ScalarFunction.SARG_PREDICATE,
@@ -184,6 +192,9 @@ public class DataFusionAnalyticsBackendPlugin implements AnalyticsSearchBackendP
         ScalarFunction.LESS_THAN,
         ScalarFunction.LESS_THAN_OR_EQUAL,
         ScalarFunction.IN,
+        ScalarFunction.ARRAY_CONTAINS,
+        ScalarFunction.ARRAY_ANY_COMPARE,
+        ScalarFunction.ARRAY_ANY_BETWEEN,
         ScalarFunction.LIKE,
         ScalarFunction.REGEXP,
         ScalarFunction.REGEXP_CONTAINS,
@@ -439,6 +450,10 @@ public class DataFusionAnalyticsBackendPlugin implements AnalyticsSearchBackendP
         ScalarFunction.ARRAY,
         ScalarFunction.ARRAY_SLICE,
         ScalarFunction.ARRAY_DISTINCT,
+        ScalarFunction.ARRAY_MAP_STRING,
+        ScalarFunction.ARRAY_MAP_INTEGER,
+        ScalarFunction.ARRAY_NULLIF,
+        ScalarFunction.ARRAY_COALESCE,
         ScalarFunction.ITEM,
         ScalarFunction.SAFE_CAST,
         ScalarFunction.MVZIP,
@@ -705,6 +720,12 @@ public class DataFusionAnalyticsBackendPlugin implements AnalyticsSearchBackendP
                 );
                 return Map.ofEntries(
                     Map.entry(ScalarFunction.ARRAY, new MakeArrayAdapter()),
+                    Map.entry(ScalarFunction.ARRAY_ANY_BETWEEN, ArrayAnyPredicateAdapter.between()),
+                    Map.entry(ScalarFunction.ARRAY_ANY_COMPARE, ArrayAnyPredicateAdapter.compare()),
+                    Map.entry(ScalarFunction.ARRAY_MAP_STRING, ArrayElementWiseAdapter.mapString()),
+                    Map.entry(ScalarFunction.ARRAY_MAP_INTEGER, ArrayElementWiseAdapter.mapInteger()),
+                    Map.entry(ScalarFunction.ARRAY_NULLIF, ArrayElementWiseAdapter.nullif()),
+                    Map.entry(ScalarFunction.ARRAY_COALESCE, ArrayElementWiseAdapter.coalesce()),
                     Map.entry(ScalarFunction.ARRAY_JOIN, new ArrayToStringAdapter()),
                     Map.entry(ScalarFunction.ARRAY_LENGTH, new IntegerReturnWideningCastAdapter()),
                     Map.entry(ScalarFunction.ARRAY_SLICE, new ArraySliceAdapter()),
